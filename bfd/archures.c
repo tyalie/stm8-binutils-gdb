@@ -463,6 +463,8 @@ DESCRIPTION
 .  bfd_arch_mmix,      {* Donald Knuth's educational processor.  *}
 .  bfd_arch_xstormy16,
 .#define bfd_mach_xstormy16	1
+.  bfd_arch_stm8,	{* ST STM8 *}
+.#define bfd_mach_stm8		1
 .  bfd_arch_msp430,    {* Texas Instruments MSP430 architecture.  *}
 .#define bfd_mach_msp11		11
 .#define bfd_mach_msp110	110
@@ -578,6 +580,8 @@ DESCRIPTION
 .#define bfd_mach_amdgcn_gfx1100 0x041
 .#define bfd_mach_amdgcn_gfx1101 0x046
 .#define bfd_mach_amdgcn_gfx1102 0x047
+=======
+>>>>>>> theirs
 .  bfd_arch_last
 .  };
 */
@@ -714,6 +718,7 @@ extern const bfd_arch_info_type bfd_xtensa_arch;
 extern const bfd_arch_info_type bfd_xgate_arch;
 extern const bfd_arch_info_type bfd_z80_arch;
 extern const bfd_arch_info_type bfd_z8k_arch;
+extern const bfd_arch_info_type bfd_stm8_arch;
 
 static const bfd_arch_info_type * const bfd_archures_list[] =
   {
@@ -801,6 +806,7 @@ static const bfd_arch_info_type * const bfd_archures_list[] =
     &bfd_xgate_arch,
     &bfd_z80_arch,
     &bfd_z8k_arch,
+    &bfd_stm8_arch,
 #endif
   0
 };

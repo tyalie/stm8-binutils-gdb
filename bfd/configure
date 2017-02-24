@@ -16092,6 +16092,7 @@ do
     z80_coff_vec)		 tb="$tb coff-z80.lo reloc16.lo $coffgen" ;;
     z80_elf32_vec)		 tb="$tb elf32-z80.lo elf32.lo $elf" ;;
     z8k_coff_vec)		 tb="$tb coff-z8k.lo reloc16.lo $coff" ;;
+    stm8_elf32_vec)		 tb="$tb elf32-stm8.lo elf32.lo $elf" ;;
 
     # These appear out of order in targets.c
     srec_vec)			 tb="$tb srec.lo" ;;

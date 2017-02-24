@@ -438,6 +438,8 @@ case ${generic_target} in
 
   z8k-*-coff | z8k-*-sim)		fmt=coff ;;
 
+  stm8-*-elf*)				fmt=elf ;;
+
   *-*-aout | *-*-scout)			fmt=aout ;;
   *-*-cloudabi*)			fmt=elf em=cloudabi ;;
   *-*-dragonfly*)			fmt=elf em=dragonfly ;;
@@ -453,7 +455,7 @@ esac
 
 case ${cpu_type} in
   aarch64 | alpha | arm | csky | i386 | ia64 | kvx | microblaze | mips | ns32k | \
-  or1k | or1knd | pdp11 | ppc | riscv | sh | sparc | z80 | z8k | loongarch)
+  or1k | or1knd | pdp11 | ppc | riscv | sh | sparc | stm8 | z80 | z8k | loongarch)
     bfd_gas=yes
     ;;
 esac

@@ -642,7 +642,8 @@ ALL_MACHINES = \
 	cpu-xstormy16.lo \
 	cpu-xtensa.lo \
 	cpu-z80.lo \
-	cpu-z8k.lo
+	cpu-z8k.lo \
+	cpu-stm8.lo
 
 ALL_MACHINES_CFILES = \
 	cpu-aarch64.c \
@@ -726,7 +727,8 @@ ALL_MACHINES_CFILES = \
 	cpu-xstormy16.c \
 	cpu-xtensa.c \
 	cpu-z80.c \
-	cpu-z8k.c
+	cpu-z8k.c \
+	cpu-stm8.c
 
 
 # The .o files needed by all of the 32 bit vectors that are configured into
@@ -864,7 +866,8 @@ BFD32_BACKENDS = \
 	xsym.lo \
 	xtensa-dynconfig.lo \
 	xtensa-isa.lo \
-	xtensa-modules.lo
+	xtensa-modules.lo \
+	elf32-stm8.lo
 
 BFD32_BACKENDS_CFILES = \
 	aout-cris.c \
@@ -998,7 +1001,8 @@ BFD32_BACKENDS_CFILES = \
 	xsym.c \
 	xtensa-dynconfig.c \
 	xtensa-isa.c \
-	xtensa-modules.c
+	xtensa-modules.c \
+	elf32-stm8.c
 
 
 # The .o files needed by all of the 64 bit vectors that are configured into
@@ -1545,6 +1549,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cpu-sh.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cpu-sparc.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cpu-spu.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cpu-stm8.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cpu-tic30.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cpu-tic4x.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cpu-tic54x.Plo@am__quote@
@@ -1633,6 +1638,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/elf32-sh.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/elf32-sparc.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/elf32-spu.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/elf32-stm8.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/elf32-tic6x.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/elf32-tilegx.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/elf32-tilepro.Plo@am__quote@

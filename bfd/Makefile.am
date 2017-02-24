@@ -176,7 +176,8 @@ ALL_MACHINES = \
 	cpu-xstormy16.lo \
 	cpu-xtensa.lo \
 	cpu-z80.lo \
-	cpu-z8k.lo
+	cpu-z8k.lo \
+	cpu-stm8.lo
 
 ALL_MACHINES_CFILES = \
 	cpu-aarch64.c \
@@ -260,7 +261,8 @@ ALL_MACHINES_CFILES = \
 	cpu-xstormy16.c \
 	cpu-xtensa.c \
 	cpu-z80.c \
-	cpu-z8k.c
+	cpu-z8k.c \
+	cpu-stm8.c
 
 # The .o files needed by all of the 32 bit vectors that are configured into
 # target_vector in targets.c if configured with --enable-targets=all.
@@ -397,7 +399,8 @@ BFD32_BACKENDS = \
 	xsym.lo \
 	xtensa-dynconfig.lo \
 	xtensa-isa.lo \
-	xtensa-modules.lo
+	xtensa-modules.lo \
+	elf32-stm8.lo
 
 BFD32_BACKENDS_CFILES = \
 	aout-cris.c \
@@ -531,7 +534,8 @@ BFD32_BACKENDS_CFILES = \
 	xsym.c \
 	xtensa-dynconfig.c \
 	xtensa-isa.c \
-	xtensa-modules.c
+	xtensa-modules.c \
+	elf32-stm8.c
 
 # The .o files needed by all of the 64 bit vectors that are configured into
 # target_vector in targets.c if configured with --enable-targets=all

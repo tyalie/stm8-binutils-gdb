@@ -1719,6 +1719,8 @@ enum bfd_architecture
   bfd_arch_mmix,      /* Donald Knuth's educational processor.  */
   bfd_arch_xstormy16,
 #define bfd_mach_xstormy16     1
+  bfd_arch_stm8,       /* ST STM8 */
+#define bfd_mach_stm8          1
   bfd_arch_msp430,    /* Texas Instruments MSP430 architecture.  */
 #define bfd_mach_msp11         11
 #define bfd_mach_msp110        110
@@ -7302,6 +7304,9 @@ enum bfd_reloc_code_real
   BFD_RELOC_WASM32_CODE_POINTER,
   BFD_RELOC_WASM32_INDEX,
   BFD_RELOC_WASM32_PLT_SIG,
+
+  /* STM8 bit field immediate for BTJx, BCPL, BSET, BRES  instruction.  */
+  BFD_RELOC_STM8_BIT_FLD,
 
   /* C-SKY relocations.  */
   BFD_RELOC_CKCORE_NONE,

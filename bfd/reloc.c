@@ -7968,6 +7968,11 @@ ENUMDOC
   WebAssembly relocations.
 
 ENUM
+  BFD_RELOC_STM8_BIT_FLD
+ENUMDOC
+  STM8 bit field immediate for BTJx, BCPL, BSET, BRES  instruction.
+
+ENUM
   BFD_RELOC_CKCORE_NONE
 ENUMX
   BFD_RELOC_CKCORE_ADDR32

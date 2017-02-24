@@ -752,6 +752,11 @@ z80*)
 	# Target: Z80
 	gdb_target_obs="z80-tdep.o"
 	;;
+stm8-*-*)
+	# Target: STM8
+	gdb_target_obs="stm8-tdep.o"
+	#gdb_sim=../sim/stm8/libsim.a
+	;;
 
 esac
 

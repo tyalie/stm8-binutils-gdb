@@ -225,6 +225,7 @@ x86_64*)	 targ_archs=bfd_i386_arch ;;
 xtensa*)	 targ_archs=bfd_xtensa_arch ;;
 z80*|r800|z180|gbz80|ez80*)	 targ_archs=bfd_z80_arch ;;
 z8k*)		 targ_archs=bfd_z8k_arch ;;
+stm8*)		 targ_archs=bfd_stm8_arch ;;
 *)		 targ_archs=bfd_${targ_cpu}_arch ;;
 esac
 
@@ -1393,6 +1394,11 @@ case "${targ}" in
   spu-*-elf)
     targ_defvec=spu_elf32_vec
     want64=true
+    ;;
+
+  stm8-*-elf*)
+    targ_defvec=stm8_elf32_vec
+    targ_underscore=yes
     ;;
 
   tic6x-*-elf)
