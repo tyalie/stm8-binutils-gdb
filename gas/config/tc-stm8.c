@@ -2,7 +2,7 @@
    Written by Ake Rehnman 2017-02-21,
    ake.rehnman (at) gmail dot com
 
-   Copyright (C) 2007-2024 Free Software Foundation, Inc.
+   Copyright (C) 2007-2017 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -56,6 +56,10 @@ const char line_separator_chars[] = "{";
 int md_short_jump_size = 3;
 int md_long_jump_size = 4;
 
+#ifdef DEBUG_STM8
+int stm8_debug_dump = 0;
+#endif
+
 /* The target specific pseudo-ops which we support.  */
 /* example:
 const pseudo_typeS md_pseudo_table[] =
@@ -93,13 +97,29 @@ md_show_usage (FILE *stream)
   fprintf (stream, _ ("\
   STM8 options:\n\
   "));
+#ifdef DEBUG_STM8
+  fprintf (stream, _ ("\
+  --debug               turn on debug messages\n"));
+#endif
 }
 
 const char *md_shortopts = "";
 
-struct option md_longopts[] = { { NULL, no_argument, NULL, 0 } };
+struct option md_longopts[] = {
+#ifdef DEBUG_STM8
+  { "debug", no_argument, &stm8_debug_dump, 1 },
+#endif
+  { NULL, no_argument, NULL, 0 }
+};
 
 size_t md_longopts_size = sizeof (md_longopts);
+
+int
+md_parse_option (int c __attribute__ ((unused)),
+                 const char *arg __attribute__ ((unused)))
+{
+  return 1;
+}
 
 void
 md_begin (void)
@@ -210,8 +230,6 @@ md_operand (expressionS *exp __attribute__ ((unused)))
   as_bad (_ ("stm8: call to md_operand"));
 }
 
-void print_fixup (fixS *);
-
 /* Attempt to simplify or eliminate a fixup. To indicate that a fixup
    has been eliminated, set fix->fx_done. If fix->fx_addsy is non-NULL,
    we will have to generate a reloc entry.  */
@@ -221,7 +239,7 @@ md_apply_fix (fixS *fixP, valueT *valP, segT segment ATTRIBUTE_UNUSED)
   long val = *(long *)valP;
   char *buf = fixP->fx_where + fixP->fx_frag->fr_literal;
 
-  print_fixup (fixP);
+  DEBUG_TRACE_FIXUP (fixP);
 
   switch (fixP->fx_r_type)
     {
@@ -321,7 +339,7 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp ATTRIBUTE_UNUSED)
 {
   arelent *reloc;
 
-  print_fixup (fixp);
+  DEBUG_TRACE_FIXUP (fixp);
 
   reloc = XNEW (arelent);
   reloc->sym_ptr_ptr = XNEW (asymbol *);
@@ -349,13 +367,6 @@ md_section_align (segT seg, valueT size)
   valueT mask = ((valueT)1 << align) - 1;
 
   return (size + mask) & ~mask;
-}
-
-int
-md_parse_option (int c __attribute__ ((unused)),
-                 const char *arg __attribute__ ((unused)))
-{
-  return 1;
 }
 
 symbolS *
@@ -521,7 +532,7 @@ read_arg_ptr (char *str, expressionS *exps)
         }
 
       expression (exps);
-      print_expr (exps);
+      DEBUG_TRACE_EXPR (exps);
 
       /* restore c */
       if (p)
@@ -560,7 +571,8 @@ char *toupperstr (char *str);
 char *
 toupperstr (char *str)
 {
-  for (int i = 0; str[i]; i++)
+  int i;
+  for (i = 0; str[i]; i++)
     {
       str[i] = toupper (str[i]);
     }
@@ -588,7 +600,7 @@ We need to properly handle each of them in order to find a proper opcode. */
       exps->X_md = OP_IMM;
       input_line_pointer = str;
       expression (exps);
-      print_expr (exps);
+      DEBUG_TRACE_EXPR (exps);
       return 1;
     }
 
@@ -651,7 +663,7 @@ We need to properly handle each of them in order to find a proper opcode. */
       str = strtok (str, ",");
       input_line_pointer = str;
       expression (exps);
-      print_expr (exps);
+      DEBUG_TRACE_EXPR (exps);
       exps->X_md = OP_OFF_X;
       return 1;
     }
@@ -677,7 +689,7 @@ We need to properly handle each of them in order to find a proper opcode. */
       str = strtok (str, ",");
       input_line_pointer = str;
       expression (exps);
-      print_expr (exps);
+      DEBUG_TRACE_EXPR (exps);
       exps->X_md = OP_OFF_X;
       return 1;
     }
@@ -688,7 +700,7 @@ We need to properly handle each of them in order to find a proper opcode. */
       str = strtok (str, ",");
       input_line_pointer = str;
       expression (exps);
-      print_expr (exps);
+      DEBUG_TRACE_EXPR (exps);
       exps->X_md = OP_OFF_SP;
       return 1;
     }
@@ -702,7 +714,7 @@ We need to properly handle each of them in order to find a proper opcode. */
       exps->X_md = OP_SHORTMEM;
       input_line_pointer = str;
       expression (exps);
-      print_expr (exps);
+      DEBUG_TRACE_EXPR (exps);
       *p = c;
       input_line_pointer += 6;
       return 1;
@@ -710,7 +722,7 @@ We need to properly handle each of them in order to find a proper opcode. */
 
   input_line_pointer = str;
   expression (exps);
-  print_expr (exps);
+  DEBUG_TRACE_EXPR (exps);
 
   if (exps->X_op == O_register)
     {
