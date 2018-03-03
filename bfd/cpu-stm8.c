@@ -18,13 +18,14 @@
    along with this program; if not, write to the Free Software Foundation,
    Inc., 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
 
+#include "sysdep.h"
+
 #include "bfd.h"
 #include "libbfd.h"
-#include "sysdep.h"
 
 const bfd_arch_info_type bfd_stm8_arch
     = { .bits_per_word = 8,
-        .bits_per_address = 24,
+        .bits_per_address = 32,
         .bits_per_byte = 8,
         .arch = bfd_arch_stm8,
         .mach = bfd_mach_stm8,

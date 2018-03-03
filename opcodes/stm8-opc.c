@@ -728,6 +728,15 @@ const struct stm8_opcodes_s stm8_opcodes[] = {
   { NULL, { ST8_END }, 0 },
 };
 
+int
+stm8_num_opcode_operands (struct stm8_opcodes_s opcode)
+{
+  int i;
+  for (i = 0; opcode.constraints[i]; i++)
+    ;
+  return i;
+}
+
 unsigned int
 stm8_opcode_size (unsigned int number)
 {

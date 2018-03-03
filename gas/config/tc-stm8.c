@@ -690,7 +690,7 @@ We need to properly handle each of them in order to find a proper opcode. */
       input_line_pointer = str;
       expression (exps);
       DEBUG_TRACE_EXPR (exps);
-      exps->X_md = OP_OFF_X;
+      exps->X_md = OP_OFF_Y;
       return 1;
     }
   // offset,SP
@@ -760,19 +760,28 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
               char *frag)
 {
   int i;
+  int arg = 0;
+  int dir = 1;
 
-  for (i = 0; i < count; i++)
+  if (count < 0)
+    {
+      count = -count;
+      arg = count - 1;
+      dir = -1;
+    }
+
+  for (i = 0; i < count; i++, arg += dir)
     {
       int where = frag - frag_now->fr_literal;
 
-      if (exp[i].X_op != O_illegal)
+      if (exp[arg].X_op != O_illegal)
         {
-          switch (op.constraints[i])
+          switch (op.constraints[arg])
             {
             case ST8_EXTMEM:
             case ST8_EXTOFF_X:
             case ST8_EXTOFF_Y:
-              fix_new_exp (frag_now, where, 3, &exp[i], FALSE, BFD_RELOC_24);
+              fix_new_exp (frag_now, where, 3, &exp[arg], FALSE, BFD_RELOC_24);
               bfd_put_bits (0xaaaaaaaa, frag, 24, true);
               frag += 3;
               break;
@@ -784,7 +793,7 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
             case ST8_LONGOFF_X:
             case ST8_WORD:
             case ST8_LONGMEM:
-              fix_new_exp (frag_now, where, 2, &exp[i], FALSE, BFD_RELOC_16);
+              fix_new_exp (frag_now, where, 2, &exp[arg], FALSE, BFD_RELOC_16);
               bfd_put_bits (0xaaaaaaaa, frag, 16, true);
               frag += 2;
               break;
@@ -796,18 +805,18 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
             case ST8_SHORTOFF_SP:
             case ST8_BYTE:
             case ST8_SHORTMEM:
-              fix_new_exp (frag_now, where, 1, &exp[i], FALSE, BFD_RELOC_8);
+              fix_new_exp (frag_now, where, 1, &exp[arg], FALSE, BFD_RELOC_8);
               bfd_put_bits (0xaaaaaaaa, frag, 8, true);
               frag += 1;
               break;
             case ST8_PCREL:
-              fix_new_exp (frag_now, where, 1, &exp[i], TRUE,
+              fix_new_exp (frag_now, where, 1, &exp[arg], TRUE,
                            BFD_RELOC_8_PCREL);
               bfd_put_bits (0xaaaaaaaa, frag, 8, true);
               frag += 1;
               break;
             case ST8_BIT_0:
-              fix_new_exp (frag_now, where - 3, 1, &exp[i], FALSE,
+              fix_new_exp (frag_now, where - 3, 1, &exp[arg], FALSE,
                            BFD_RELOC_STM8_BIT_FLD);
               break;
             default:
@@ -928,11 +937,6 @@ cmpspec (stm8_addr_mode_t addr_mode[], expressionS exps[], int count)
           return 1;
         }
 
-      //		if (operand == ST8_DIRECT)
-      //		{
-      //			if (addr_mode[i] == ST8_SHORTMEM) continue;
-      //		}
-
       // not a match
       ret++;
     }
@@ -976,6 +980,14 @@ md_assemble (char *str)
             int opcode_length = stm8_opcode_size (opcode[i].bin_opcode);
             bfd_put_bits (opcode[i].bin_opcode, frag, opcode_length * 8, true);
             frag += opcode_length;
+
+            /* mov insn operands are reversed */
+            if ((opcode[i].bin_opcode == 0x35)
+                || (opcode[i].bin_opcode == 0x45)
+                || (opcode[i].bin_opcode == 0x55))
+            {
+              count = -count;
+            }
             stm8_bfd_out (opcode[i], exps, count, frag);
             break;
           }

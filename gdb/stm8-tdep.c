@@ -19,6 +19,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
+#include "defs.h"
+
 #include "arch-utils.h"
 #include "defs.h"
 #include "dis-asm.h"
@@ -34,6 +36,7 @@
 #include "progspace.h"
 #include "regcache.h"
 #include "symfile.h"
+#include <regcache.h>
 #include "target-descriptions.h"
 #include "trad-frame.h"
 #include <algorithm>
@@ -47,16 +50,21 @@ enum stm8_regnum
   STM8_SP_REGNUM,
   STM8_CC_REGNUM,
   // pseudo register
-  STM8_FP_REGNUM
+  STM8_XH_REGNUM,
+  STM8_XL_REGNUM,
+  STM8_YH_REGNUM,
+  STM8_YL_REGNUM,
+};
+
+#define STM8_NUM_PSEUDOREGS 4
+
+enum stm8_producer
+{
+  GCC_PRODUCER,
+  SDCC_PRODUCER
 };
 
 static const char *stm8_register_names[] = { "pc", "a", "x", "y", "sp", "cc" };
-
-struct stm8_soft_reg
-{
-  const char *name;
-  CORE_ADDR addr;
-};
 
 unsigned int stm8_debug = 1;
 
@@ -64,7 +72,13 @@ unsigned int stm8_debug = 1;
 
 struct stm8_gdbarch_tdep : gdbarch_tdep_base
 {
-  struct stm8_soft_reg fp_reg;
+  enum stm8_producer producer;
+  /* Type for void.  */
+  struct type *void_type;
+  /* Type for a function returning void.  */
+  struct type *func_void_type;
+  /* Type for a pointer to a function.  Used for the type of PC.  */
+  struct type *pc_type;
 };
 
 enum insn_return_kind
@@ -78,10 +92,19 @@ static int
 stm8_convert_register_p (struct gdbarch *gdbarch, int regnum,
                          struct type *type)
 {
-  if ((regnum == STM8_FP_REGNUM) && (type->length () > 2))
+  if ((regnum == STM8_SP_REGNUM) && (type->length() > 2))
     {
       return 1;
     }
+  if ((regnum == STM8_X_REGNUM) && (type->length() > 2))
+    {
+      return 1;
+    }
+  if ((regnum == STM8_Y_REGNUM) && (type->length() > 2))
+    {
+      return 1;
+    }
+
   return 0;
 }
 
@@ -92,65 +115,43 @@ static int
 stm8_register_to_value (frame_info_ptr frame, int regnum, struct type *type,
                         gdb_byte *to, int *optimizedp, int *unavailablep)
 {
-  struct type *fpreg_type
-      = register_type (get_frame_arch (frame), STM8_FP_REGNUM);
-
-  /* We only support ptr values.  */
-  if ((type->code () != TYPE_CODE_PTR) && (regnum != STM8_FP_REGNUM)
-      && (type->length () >= fpreg_type->length ()))
-    {
-      warning (
-          _ ("Conversion failure in stm8_register_to_value: regnum = %d "),
-          regnum);
-      *optimizedp = *unavailablep = 0;
-      return 0;
-    }
-
   /* Convert to TYPE.  */
 
   memset (to, 0, type->length ());
 
-  if (!get_frame_register_bytes (
-          frame, regnum, 0,
-          { to + type->length () - fpreg_type->length (),
-            fpreg_type->length () },
-          optimizedp, unavailablep))
+  if (!get_frame_register_bytes (frame, regnum, 0, 
+				 { to + type->length() - 2, 2},
+                                 optimizedp, unavailablep))
     return 0;
 
   *optimizedp = *unavailablep = 0;
   return 1;
 }
 
-/* Look in the symbol table for the address of a pseudo register
-   in memory.  If we don't find it, pretend the register is not used
-   and not available.  */
-static void
-stm8_get_register_info (struct stm8_soft_reg *reg, const char *name)
+static stm8_producer
+stm8_get_producer ()
 {
-  struct bound_minimal_symbol msymbol;
-
-  msymbol = lookup_minimal_symbol (name, NULL, NULL);
-  if (msymbol.minsym)
+  if (current_program_space != NULL)
     {
-      reg->addr = msymbol.value_address ();
-      reg->name = xstrdup (name);
+      for (objfile *objfile : current_program_space->objfiles() )
+      {
+	for (compunit_symtab *cust : objfile->compunits() ) 
+	{
+	  if (cust && cust->producer() != NULL
+	      && startswith (cust->producer(), "SDCC"))
+          {
+            return SDCC_PRODUCER;
+          }
+	}
+      }
     }
-  else
-    {
-      reg->name = 0;
-      reg->addr = 0;
-    }
+  return GCC_PRODUCER;
 }
 
 static void
 stm8_initialize_soft_register_info (struct stm8_gdbarch_tdep *tdep)
 {
-  stm8_get_register_info (&tdep->fp_reg, "_fp_");
-  if ((tdep->fp_reg.name == 0) && (current_program_space->symfile_object_file))
-    {
-      warning (_ ("No frame soft register found in the symbol table (_fp_).\n"
-                  "Stack backtrace will not work.\n"));
-    }
+  tdep->producer = stm8_get_producer ();
 }
 
 static const char *
@@ -158,8 +159,21 @@ stm8_register_name (struct gdbarch *gdbarch, int regnum)
 {
   if (regnum >= 0 && regnum < STM8_NUM_REGS)
     return stm8_register_names[regnum];
-  if (regnum == STM8_FP_REGNUM)
-    return "fp";
+
+  if (stm8_get_producer () == SDCC_PRODUCER)
+    {
+      switch (regnum)
+        {
+        case STM8_XH_REGNUM:
+          return "xh";
+        case STM8_XL_REGNUM:
+          return "xl";
+        case STM8_YH_REGNUM:
+          return "yh";
+        case STM8_YL_REGNUM:
+          return "yl";
+        }
+    }
   return NULL;
 }
 
@@ -175,8 +189,6 @@ stm8_register_type (struct gdbarch *gdbarch, int regnum)
     case STM8_X_REGNUM:
     case STM8_Y_REGNUM:
       return builtin_type (gdbarch)->builtin_uint16;
-    case STM8_FP_REGNUM:
-      return builtin_type (gdbarch)->builtin_uint16;
     default:
       return builtin_type (gdbarch)->builtin_uint8;
     }
@@ -187,19 +199,43 @@ stm8_pseudo_register_read (struct gdbarch *gdbarch,
                            readable_regcache *regcache, int regnum,
                            gdb_byte *buf)
 {
-  struct stm8_gdbarch_tdep *tdep = gdbarch_tdep<stm8_gdbarch_tdep> (gdbarch);
-  int regsize = 2;
+  enum register_status status;
+  gdb_byte tmp[4];
 
   switch (regnum)
     {
-    case STM8_FP_REGNUM:
-      /* Fetch a soft register: translate into a memory read.  */
-      memset (buf, 0, regsize);
-      if (tdep->fp_reg.name)
+    case STM8_XH_REGNUM:
+      status = regcache->raw_read (STM8_X_REGNUM, tmp);
+      if (status == REG_VALID)
         {
-          target_read_memory (tdep->fp_reg.addr, buf, 2);
+          buf[0] = tmp[0];
         }
-      return REG_VALID;
+      return status;
+
+    case STM8_XL_REGNUM:
+      status = regcache->raw_read (STM8_X_REGNUM, tmp);
+      if (status == REG_VALID)
+        {
+          buf[0] = tmp[1];
+        }
+      return status;
+
+    case STM8_YH_REGNUM:
+      status = regcache->raw_read (STM8_Y_REGNUM, tmp);
+      if (status == REG_VALID)
+        {
+          buf[0] = tmp[0];
+        }
+      return status;
+
+    case STM8_YL_REGNUM:
+      status = regcache->raw_read (STM8_Y_REGNUM, tmp);
+      if (status == REG_VALID)
+        {
+          buf[0] = tmp[1];
+        }
+      return status;
+
     default:
       internal_error (_ ("invalid regnum"));
       return REG_UNAVAILABLE;
@@ -210,23 +246,54 @@ static void
 stm8_pseudo_register_write (struct gdbarch *gdbarch, struct regcache *regcache,
                             int regnum, const gdb_byte *buf)
 {
-  struct stm8_gdbarch_tdep *tdep = gdbarch_tdep<stm8_gdbarch_tdep> (gdbarch);
+  enum register_status status;
+  gdb_byte tmp[4];
 
   switch (regnum)
     {
-    case STM8_FP_REGNUM:
-      /* Store a soft register: translate into a memory write.  */
-      if (tdep->fp_reg.name)
-        {
 
-          target_write_memory (tdep->fp_reg.addr, buf, 2);
+    case STM8_XH_REGNUM:
+      status = regcache_raw_read_unsigned (regcache, STM8_X_REGNUM, (ULONGEST*)tmp);
+      if (status == REG_VALID)
+        {
+          tmp[0] = buf[0];
+          regcache->raw_write (STM8_X_REGNUM, tmp);
         }
       return;
+
+    case STM8_XL_REGNUM:
+      status = regcache_raw_read_unsigned (regcache, STM8_X_REGNUM, (ULONGEST*)tmp);
+      if (status == REG_VALID)
+        {
+          tmp[1] = buf[0];
+          regcache->raw_write (STM8_X_REGNUM, tmp);
+        }
+      return;
+
+    case STM8_YH_REGNUM:
+      status = regcache_raw_read_unsigned (regcache, STM8_Y_REGNUM, (ULONGEST*)tmp);
+      if (status == REG_VALID)
+        {
+          tmp[0] = buf[0];
+          regcache->raw_write (STM8_Y_REGNUM, tmp);
+        }
+      return;
+
+    case STM8_YL_REGNUM:
+      status = regcache_raw_read_unsigned (regcache, STM8_Y_REGNUM, (ULONGEST*)tmp);
+      if (status == REG_VALID)
+        {
+          tmp[1] = buf[0];
+          regcache->raw_write (STM8_Y_REGNUM, tmp);
+        }
+      return;
+
     default:
       internal_error (_ ("invalid regnum"));
       return;
     }
 }
+
 
 struct stm8_frame_cache
 {
@@ -292,22 +359,50 @@ stm8_sw_breakpoint_from_kind (struct gdbarch *gdbarch, int kind, int *size)
   return stm8_breakpoint;
 }
 
-static int dwarf2_to_reg_map[6] = {
-  0 /* r0  */, 1 /* r1  */,
-  2 /* r2  */, 3 /* r3  */, /*  0- 3 */
-  4 /* r4  */, 5            /* r5  */
-};
+static int dwarf2_to_reg_map_sdcc[] = { STM8_A_REGNUM,  // a
+                                        STM8_XL_REGNUM, // xl
+                                        STM8_XH_REGNUM, // xh
+                                        STM8_YL_REGNUM, // yl
+                                        STM8_YH_REGNUM, // yh
+                                        STM8_CC_REGNUM, // cc
+                                        STM8_X_REGNUM,  // x
+                                        STM8_Y_REGNUM,  // y
+                                        STM8_SP_REGNUM, // sp
+                                        STM8_PC_REGNUM, // pc
+                                        -1 };
+
+static int dwarf2_to_reg_map_gcc[] = { STM8_A_REGNUM,  // a
+                                       STM8_X_REGNUM,  // x
+                                       STM8_Y_REGNUM,  // y
+                                       STM8_SP_REGNUM, // sp
+                                       -1 };
 
 static int
 stm8_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int reg)
 {
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog, "stm8_dwarf2_reg_to_regnum called\n");
-  if (reg >= 0 && reg < sizeof (dwarf2_to_reg_map))
-    return dwarf2_to_reg_map[reg];
-  if (reg == 31)
-    return STM8_FP_REGNUM;
-  return -1;
+  int ret = -1;
+
+  static int *t;
+
+  if (stm8_get_producer () == SDCC_PRODUCER)
+    t = dwarf2_to_reg_map_sdcc;
+  else
+    t = dwarf2_to_reg_map_gcc;
+
+  for (int i = 0; (t[i] > 0) && (i < 32); i++)
+    {
+      if (i == reg)
+        {
+          ret = t[i];
+          break;
+        }
+    }
+
+  if ((stm8_debug > 1) && (ret >= 0))
+    gdb_printf (gdb_stdlog, "stm8_dwarf2_reg_to_regnum called reg=%d ret=%d\n",
+                reg, t[reg]);
+
+  return ret;
 }
 
 static void
@@ -324,10 +419,15 @@ stm8_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame)
   gdb_byte buf[4];
   CORE_ADDR pc;
 
+  struct stm8_gdbarch_tdep *tdep = gdbarch_tdep<stm8_gdbarch_tdep>(gdbarch);
   frame_unwind_register (next_frame, STM8_PC_REGNUM, buf);
-  pc = extract_typed_address (buf, builtin_type (gdbarch)->builtin_func_ptr);
+  if (frame_relative_level (next_frame) < 0)
+    pc = extract_typed_address (buf, builtin_type (gdbarch)->builtin_func_ptr);
+  else
+    pc = extract_typed_address (buf, tdep->pc_type);
   if (stm8_debug)
-    gdb_printf (gdb_stdlog, "stm8_unwind_pc called: pc=%8.8lx\n", pc);
+    gdb_printf (gdb_stdlog, "stm8_unwind_pc called: pc=%8.8lx\n",
+                (unsigned long)pc);
   return pc;
 }
 
@@ -341,57 +441,6 @@ stm8_unwind_sp (struct gdbarch *gdbarch, frame_info_ptr next_frame)
   if (stm8_debug)
     gdb_printf (gdb_stdlog, "stm8_unwind_sp called: sp=%8.8lx\n", sp);
   return sp;
-}
-
-/*
-static struct value *
-stm8_dwarf2_prev_register (frame_info_ptr this_frame,
-                void **this_cache, int regnum)
-{
-        CORE_ADDR pc;
-
-        switch (regnum)
-        {
-            case STM8_PC_REGNUM:
-              pc = frame_unwind_register_unsigned (this_frame,
-AARCH64_PC_REGNUM); return frame_unwind_got_constant (this_frame, regnum, lr);
-
-        default:
-                internal_error (_("Unexpected register %d"), regnum);
-        }
-}
-
-static void
-stm8_dwarf2_frame_init_reg (struct gdbarch *gdbarch, int regnum,
-                struct dwarf2_frame_state_reg *reg,
-                frame_info_ptr this_frame)
-{
-        switch (regnum)
-        {
-        case STM8_PC_REGNUM:
-                reg->how = DWARF2_FRAME_REG_FN;
-                reg->loc.fn = stm8_dwarf2_prev_register;
-                break;
-        case STM8_SP_REGNUM:
-                reg->how = DWARF2_FRAME_REG_CFA;
-                break;
-        }
-}
-*/
-
-/* Assuming THIS_FRAME is a dummy, return the frame ID of that
-   dummy frame.  The frame ID's base needs to match the TOS value
-   saved by save_dummy_frame_tos(), and the PC match the dummy frame's
-   breakpoint.  */
-
-static struct frame_id
-stm8_dummy_id (struct gdbarch *gdbarch, frame_info_ptr this_frame)
-{
-  gdb_printf (gdb_stdlog, "stm8_dummy_id called\n");
-
-  return frame_id_build (
-      get_frame_register_signed (this_frame, STM8_SP_REGNUM),
-      get_frame_pc (this_frame));
 }
 
 /* Allocate and initialize a frame cache.  */
@@ -461,11 +510,10 @@ stm8_analyze_prologue (struct gdbarch *gdbarch, CORE_ADDR pc,
   if (stm8_debug)
     gdb_printf (gdb_stdlog,
                 "stm8_analyze_prologue called (pc=%8.8lx current_pc=%8.8lx)\n",
-                pc, current_pc);
+                (unsigned long)pc, (unsigned long)current_pc);
 
   /* Initialize info about frame.  */
   cache->framesize = 0;
-  cache->fp_regnum = STM8_FP_REGNUM;
   cache->frameless_p = 1;
   cache->stackadj = 0;
 
@@ -500,7 +548,7 @@ then our frame has not yet been set up.  */
     }
 
   /* Start at beginning of function and analyze until we get to the
-current pc, or the end of the function, whichever is first.  */
+  current pc, or the end of the function, whichever is first.  */
   stop = (current_pc < func_end ? current_pc : func_end);
 
   if (stm8_debug)
@@ -577,10 +625,11 @@ stm8_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR start_pc)
 {
   if (stm8_debug)
     gdb_printf (gdb_stdlog, "stm8_skip_prologue called: start_pc=%8.8lx\n",
-                start_pc);
+                (unsigned long)start_pc);
 
   struct symtab_and_line sal;
   CORE_ADDR func_start, func_end, ostart_pc;
+  CORE_ADDR post_prologue_pc;
   struct stm8_frame_cache cache;
 
   /* This is the preferred method, find the end of the prologue by
@@ -589,10 +638,15 @@ give the right answer since parameters are stored on stack after this.
 Always analyze the prologue.  */
   if (find_pc_partial_function (start_pc, NULL, &func_start, &func_end))
     {
-      sal = find_pc_line (func_start, 0);
+      post_prologue_pc = skip_prologue_using_sal (gdbarch, func_start);
 
-      if (sal.end < func_end && start_pc <= sal.end)
-        start_pc = sal.end;
+      if (stm8_debug)
+        gdb_printf (gdb_stdlog,
+                    "stm8_skip_prologue: post_prologue_pc=%8.8lx\n",
+                    (unsigned long)post_prologue_pc);
+
+      if (post_prologue_pc != 0)
+        return std::max (start_pc, post_prologue_pc);
     }
 
   ostart_pc
@@ -600,8 +654,11 @@ Always analyze the prologue.  */
 
   if (stm8_debug)
     gdb_printf (gdb_stdlog,
-                "stm8_skip_prologue: start_pc=%8.8lx ostart_pc=%8.8lx\n",
-                start_pc, ostart_pc);
+                "stm8_skip_prologue: start_pc=%8.8lx ostart_pc=%8.8lx "
+                "func_start=%8.8lx func_end=%8.8lx sal.end=%8.8lx\n",
+                (unsigned long)start_pc, (unsigned long)ostart_pc,
+                (unsigned long)func_start, (unsigned long)func_end,
+                (unsigned long)sal.end);
 
   if (ostart_pc > start_pc)
     return ostart_pc;
@@ -629,7 +686,7 @@ stm8_frame_cache (frame_info_ptr next_frame, void **this_cache)
 
   struct stm8_frame_cache *cache;
   struct gdbarch *gdbarch = get_frame_arch (next_frame);
-  CORE_ADDR start_pc, current_pc, current_sp, fp;
+  CORE_ADDR start_pc, current_pc, current_sp;
   int retsize;
 
   if (*this_cache)
@@ -652,22 +709,9 @@ stm8_frame_cache (frame_info_ptr next_frame, void **this_cache)
     stm8_analyze_prologue (gdbarch, start_pc, current_pc,
                            (struct stm8_frame_cache *)*this_cache);
 
-  /* get our fp by unwinding it from the next frame
-   * if we don't have a fp we use sp instead but if there
-   * are arguments on the stack unwinding will be
-   * unpredictable.
-   */
-  // fp = frame_unwind_register_unsigned (next_frame, cache->fp_regnum);
-  fp = get_frame_register_unsigned (next_frame, cache->fp_regnum);
-  if (fp == 0)
-    {
-      cache->base = 0;
-      cache->frameless_p = 1;
-      // return (struct stm8_frame_cache *) (*this_cache);
-    }
-
   switch (cache->return_kind)
     {
+    default:
     case RETURN_RET:
       retsize = 2;
       break;
@@ -679,61 +723,39 @@ stm8_frame_cache (frame_info_ptr next_frame, void **this_cache)
       break;
     }
 
-  if (cache->frameless_p)
-    {
-      cache->base = current_sp + cache->framesize;
-      if (cache->return_kind == RETURN_IRET)
-        cache->saved_regs[STM8_PC_REGNUM].set_addr (cache->base + 1 + 6);
-      else
-        cache->saved_regs[STM8_PC_REGNUM].set_addr (cache->base + 1);
-
-      cache->saved_regs[STM8_SP_REGNUM].set_value (cache->base + retsize);
-    }
+  cache->base = current_sp;
+  if (cache->return_kind == RETURN_IRET)
+    cache->saved_regs[STM8_PC_REGNUM].set_addr(cache->base + 1 + 6);
   else
-    {
-      /* fp points to our base */
-      cache->base = fp;
-      if (cache->return_kind == RETURN_IRET)
-        cache->saved_regs[STM8_PC_REGNUM].set_addr (cache->base + 1 + 2 + 6);
-      else
-        cache->saved_regs[STM8_PC_REGNUM].set_addr (cache->base + 1 + 2);
-      cache->saved_regs[STM8_FP_REGNUM].set_addr (fp + 1);
-      cache->saved_regs[STM8_SP_REGNUM].set_value (cache->base + retsize + 2);
-    }
+    cache->saved_regs[STM8_PC_REGNUM].set_addr(cache->base + 1);
+  cache->saved_regs[STM8_SP_REGNUM].set_value(cache->base + retsize);
 
   if (stm8_debug)
     {
       gdb_printf (
           gdb_stdlog,
-          "stm8_frame_cache: base=%4.4lx curr_pc=%4.4lx curr_sp=%4.4lx "
-          "fp_regnum=%d fp=%4.4lx framesize=%4.4x stackadj=%4.4x retsize=%d\n",
-          cache->base, current_pc, current_sp, cache->fp_regnum, fp,
-          cache->framesize, cache->stackadj, retsize);
+          "stm8_frame_cache: base=%4.4lx curr_pc=%4.4lx "
+          "curr_sp=%4.4lx framesize=%4.4x stackadj=%4.4x retsize=%d\n",
+          (unsigned long)cache->base, (unsigned long)current_pc,
+          (unsigned long)current_sp, cache->framesize, cache->stackadj,
+          retsize);
 
       CORE_ADDR frame_pc;
       CORE_ADDR frame_sp;
-      CORE_ADDR frame_fp;
       frame_pc = value_as_long (trad_frame_get_prev_register (
           next_frame, cache->saved_regs, STM8_PC_REGNUM));
       frame_sp = value_as_long (trad_frame_get_prev_register (
           next_frame, cache->saved_regs, STM8_SP_REGNUM));
 
-      // this is stupid, trad_frame_get_prev_register can't get a
-      // register value unless we have a valid frame id
-      // hopefully this will get resolved in the future :)
-      if (cache->saved_regs[STM8_FP_REGNUM].addr () > 0)
-        frame_fp = value_as_long (trad_frame_get_prev_register (
-            next_frame, cache->saved_regs, STM8_FP_REGNUM));
-      else
-        frame_fp = fp;
-
       frame_pc = frame_pc >> 16;
-      gdb_printf (gdb_stdlog, "stm8_frame_cache: pc=%8.8lx *pc=%8.8lx\n",
-                  cache->saved_regs[STM8_PC_REGNUM].addr (), frame_pc);
-      gdb_printf (gdb_stdlog, "stm8_frame_cache: sp=%8.8lx *sp=%8.8lx\n",
-                  cache->saved_regs[STM8_SP_REGNUM].addr (), frame_sp);
-      gdb_printf (gdb_stdlog, "stm8_frame_cache: fp=%8.8lx *fp=%8.8lx\n",
-                  cache->saved_regs[STM8_FP_REGNUM].addr (), frame_fp);
+      gdb_printf (gdb_stdlog,
+                  "stm8_frame_cache: pc=%8.8lx *pc=%8.8lx\n",
+                  (unsigned long)cache->saved_regs[STM8_PC_REGNUM].addr(),
+                  (unsigned long)frame_pc);
+      gdb_printf (gdb_stdlog,
+                  "stm8_frame_cache: sp=%8.8lx *sp=%8.8lx\n",
+                  (unsigned long)cache->saved_regs[STM8_SP_REGNUM].addr(),
+                  (unsigned long)frame_sp);
     }
 
   return (struct stm8_frame_cache *)(*this_cache);
@@ -772,25 +794,9 @@ stm8_frame_prev_register (frame_info_ptr this_frame, void **this_cache,
 
   value = trad_frame_get_prev_register (this_frame, info->saved_regs, regnum);
 
-  /* Take into account the STM8 specific call.
-   * Different lengths if it is CALL or CALLF  */
-  if (regnum == STM8_PC_REGNUM)
-    {
-      CORE_ADDR pc = value_as_long (value);
-      if (info->return_kind == RETURN_RET)
-        pc >>= 16;
-      else
-        pc >>= 8;
-
-      release_value (value);
-      value->decref ();
-
-      value = frame_unwind_got_constant (this_frame, regnum, pc);
-    }
-
   if (stm8_debug)
     gdb_printf (gdb_stdlog, "stm8_frame_prev_register: regnum(%d)=%8.8lx\n",
-                regnum, value_as_long (value));
+                regnum, (unsigned long)value_as_long (value));
 
   return value;
 }
@@ -877,48 +883,6 @@ static const struct frame_unwind stm8_frame_unwind
         NULL,
         default_frame_sniffer };
 
-static CORE_ADDR
-stm8_frame_base_address (frame_info_ptr next_frame, void **this_cache)
-{
-  struct stm8_frame_cache *cache = stm8_frame_cache (next_frame, this_cache);
-
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog, "stm8_frame_base_address: fb=%8.8lx\n",
-                cache->base);
-
-  return cache->base;
-}
-
-static CORE_ADDR
-stm8_frame_args_address (frame_info_ptr this_frame, void **this_cache)
-{
-  CORE_ADDR addr;
-  struct stm8_frame_cache *info = stm8_frame_cache (this_frame, this_cache);
-
-  addr = info->base;
-  if (info->return_kind == RETURN_IRET)
-    addr += 12; // 2 bytes fp + 9 bytes regs + 1
-  else if (info->return_kind == RETURN_RETF)
-    addr += 6; // 2 bytes fp + 3 bytes pc + 1
-  else
-    addr += 5; // 2 bytes fp + 2 bytes pc + 1
-
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog, "stm8_frame_args_address: addr = %8.8lx\n", addr);
-
-  return addr;
-}
-
-static const struct frame_base stm8_frame_base
-    = { &stm8_frame_unwind, stm8_frame_base_address, stm8_frame_base_address,
-        stm8_frame_args_address };
-
-static const struct frame_base *
-stm8_frame_base_sniffer (frame_info_ptr this_frame)
-{
-  return &stm8_frame_base;
-}
-
 struct target_desc *tdesc_stm8;
 static void
 initialize_tdesc_stm8 (void)
@@ -932,9 +896,9 @@ initialize_tdesc_stm8 (void)
   tdesc_create_reg (feature, "x", 2, 1, "general", 16, "uint16");
   tdesc_create_reg (feature, "y", 3, 1, "general", 16, "uint16");
   tdesc_create_reg (feature, "sp", 4, 1, "general", 16, "uint16");
-  tdesc_create_reg (feature, "cc", 5, 1, "general", 8, "uint16");
+  tdesc_create_reg (feature, "cc", 5, 1, "general", 8, "uint8");
 
-  tdesc_stm8 = tdesc.release ();
+  tdesc_stm8 = tdesc.release();
 }
 
 /* Initialize the gdbarch structure for the STM8.  */
@@ -945,13 +909,14 @@ stm8_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   struct gdbarch *gdbarch;
   struct stm8_gdbarch_tdep *tdep;
   tdesc_arch_data_up tdesc_data;
-  const struct target_desc *tdesc = info.target_desc;
+  const struct target_desc *tdesc = info.target_desc
+      = 0; // override target desc if any
 
   /* If there is already a candidate, use it.  */
   arches = gdbarch_list_lookup_by_info (arches, &info);
   if (arches != NULL)
     {
-      tdep = gdbarch_tdep<stm8_gdbarch_tdep> (arches->gdbarch);
+      tdep = gdbarch_tdep<stm8_gdbarch_tdep>(arches->gdbarch);
       stm8_initialize_soft_register_info (tdep);
       return arches->gdbarch;
     }
@@ -990,7 +955,7 @@ stm8_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_tdesc_pseudo_register_type (gdbarch, stm8_register_type);
   set_tdesc_pseudo_register_name (gdbarch, stm8_register_name);
 
-  set_gdbarch_num_pseudo_regs (gdbarch, 1);
+  set_gdbarch_num_pseudo_regs (gdbarch, STM8_NUM_PSEUDOREGS);
   set_gdbarch_pseudo_register_read (gdbarch, stm8_pseudo_register_read);
   set_gdbarch_deprecated_pseudo_register_write (gdbarch,
                                                 stm8_pseudo_register_write);
@@ -1021,23 +986,32 @@ stm8_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 
   set_gdbarch_breakpoint_from_pc (gdbarch, stm8_breakpoint_from_pc);
 
+  set_gdbarch_breakpoint_from_pc (gdbarch, stm8_breakpoint_from_pc);
+
   set_gdbarch_print_insn (gdbarch, print_insn_stm8);
 
   set_gdbarch_write_pc (gdbarch, stm8_write_pc);
 
   set_gdbarch_unwind_pc (gdbarch, stm8_unwind_pc);
   set_gdbarch_unwind_sp (gdbarch, stm8_unwind_sp);
-  set_gdbarch_dummy_id (gdbarch, stm8_dummy_id);
-
-  frame_base_set_default (gdbarch, &stm8_frame_base);
 
   dwarf2_append_unwinders (gdbarch);
   frame_unwind_append_unwinder (gdbarch, &stm8_frame_unwind);
   frame_base_append_sniffer (gdbarch, dwarf2_frame_base_sniffer);
-  frame_base_append_sniffer (gdbarch, stm8_frame_base_sniffer);
 
-  if (tdesc_data)
-    tdesc_use_registers (gdbarch, tdesc, std::move (tdesc_data));
+  /* Create a type for PC.  We can't use builtin types here, as they may not
+     be defined.  */
+  type_allocator alloc (gdbarch);
+  tdep->void_type
+      = alloc.new_type (TYPE_CODE_VOID, TARGET_CHAR_BIT, "void");
+  tdep->func_void_type = make_function_type (tdep->void_type, NULL);
+  tdep->pc_type
+      = alloc.new_type (TYPE_CODE_PTR, 2 * TARGET_CHAR_BIT, NULL);
+  tdep->pc_type->set_target_type(tdep->func_void_type);
+  tdep->pc_type->set_is_unsigned(1);
+
+  if (tdesc_data != NULL)
+    tdesc_use_registers (gdbarch, tdesc, std::move(tdesc_data));
 
   return gdbarch;
 }

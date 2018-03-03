@@ -85,38 +85,42 @@ extern int stm8_debug_dump;
 
 extern void print_fixup (void *);
 
-#define DEBUG_TRACE_FIXUP(FIX)					\
-  {								\
-    if (stm8_debug_dump) {					\
-      printf ("%s: fixup log:", __func__);		\
-      print_fixup(FIX);						\
-    }								\
+#define DEBUG_TRACE_FIXUP(FIX)                                                \
+  {                                                                           \
+    if (stm8_debug_dump)                                                      \
+      {                                                                       \
+        printf ("%s: fixup log:", __func__);                                  \
+        print_fixup (FIX);                                                    \
+      }                                                                       \
   }
 
-#define DEBUG_TRACE_EXPR(EXPR)					\
-  {								\
-    if (stm8_debug_dump) {					\
-      printf ("%s: expression log:", __func__);		\
-      print_expr_1(stdout, EXPR);					\
-    }								\
+#define DEBUG_TRACE_EXPR(EXPR)                                                \
+  {                                                                           \
+    if (stm8_debug_dump)                                                      \
+      {                                                                       \
+        printf ("%s: expression log:", __func__);                             \
+        print_expr_1 (stdout, EXPR);                                          \
+      }                                                                       \
   }
 
-#define DEBUG_TRACE(M, ...)					\
-  {								\
-    if (stm8_debug_dump)					\
-      printf ("%s: " M ".", __func__, ##__VA_ARGS__);	\
+#define DEBUG_TRACE(M, ...)                                                   \
+  {                                                                           \
+    if (stm8_debug_dump)                                                      \
+      printf ("%s: " M ".", __func__, ##__VA_ARGS__);                         \
   }
 
-#define DEBUG_TRACE_IF(C, M, ...)				\
-  {								\
-    if (stm8_debug_dump && (C))					\
-      printf ("%s: " M ".", __func__, ##__VA_ARGS__);	\
+#define DEBUG_TRACE_IF(C, M, ...)                                             \
+  {                                                                           \
+    if (stm8_debug_dump && (C))                                               \
+      printf ("%s: " M ".", __func__, ##__VA_ARGS__);                         \
   }
-#else  /* !DEBUG_STM8 */
+#else /* !DEBUG_STM8 */
 #define DEBUG_TRACE_FIXUP(FIX) ;
 #define DEBUG_TRACE_EXPR(EXPR) ;
 #define DEBUG_TRACE(M, ...) ;
 #define DEBUG_TRACE_IF(C, M, ...) ;
 #endif /* DEBUG_STM8 */
+
+int stm8_num_opcode_operands (struct stm8_opcodes_s opcode);
 
 #endif /* _STM8_H_ */

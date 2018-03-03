@@ -20,10 +20,11 @@
    Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
    MA 02110-1301, USA.  */
 
+#include "sysdep.h"
+
 #include "dis-asm.h"
 #include "libiberty.h"
 #include "opintl.h"
-#include "sysdep.h"
 #include <assert.h>
 
 #include "opcode/stm8.h"
@@ -338,36 +339,57 @@ stm8_dis (bfd_vma addr, unsigned int op)
   unsigned char *bufp;
   char s[256];
   int i = 0;
-  int j;
   char c;
   int operandlen;
+  int operand, dir;
 
   while (stm8_opcodes[i].name)
     {
       if (op == stm8_opcodes[i].bin_opcode)
         {
-          bufp = buf;
-          s[0] = 0;
           dinfo->fprintf_func (dinfo->stream, "%s", stm8_opcodes[i].name);
           operandlen = stm8_compute_insn_size (stm8_opcodes[i])
                        - stm8_opcode_size (op);
           instrlen += operandlen;
           if (fetch_data (buf, addr, dinfo, operandlen))
             return 0;
+
           lastlabeladdr = 0;
-          for (j = 0; j < 5; j++)
+          c = ' ';
+
+          for (int curr_operand = 0;
+               curr_operand < stm8_num_opcode_operands (stm8_opcodes[i]);
+               curr_operand++)
             {
-              s[0] = 0;
-              bufp += stm8_operands (s, bufp, stm8_opcodes[i].constraints[j]);
-              if (s[0])
+              bufp = buf;
+              dir = 1;
+              operand = 0;
+
+              /* mov insn operands are reversed */
+              if ((op == 0x35) || (op == 0x45) || (op == 0x55))
                 {
-                  if (j == 0)
-                    c = ' ';
-                  else
-                    c = ',';
-                  dinfo->fprintf_func (dinfo->stream, "%c%s", c, s);
+                  dir = -1;
+                  operand = stm8_num_opcode_operands (stm8_opcodes[i]) - 1;
+                }
+
+              for (int j = 0; j < stm8_num_opcode_operands (stm8_opcodes[i]);
+                   j++, operand += dir)
+                {
+                  s[0] = 0;
+                  bufp += stm8_operands (s, bufp,
+                                         stm8_opcodes[i].constraints[operand]);
+                  if (operand == curr_operand)
+                    {
+                      if (s[0])
+                        {
+                          dinfo->fprintf_func (dinfo->stream, "%c%s", c, s);
+                          c = ',';
+                        }
+                      break;
+                    }
                 }
             }
+
           if (lastlabeladdr)
             {
               dinfo->fprintf_func (dinfo->stream, " ;");
