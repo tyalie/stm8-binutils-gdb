@@ -7973,6 +7973,21 @@ ENUMDOC
   STM8 bit field immediate for BTJx, BCPL, BSET, BRES  instruction.
 
 ENUM
+  BFD_RELOC_STM8_LO8
+ENUMDOC
+  STM8 extract LSB from word.
+
+ENUM
+  BFD_RELOC_STM8_HI8
+ENUMDOC
+  STM8 extract MSB from word.
+
+ENUM
+  BFD_RELOC_STM8_HH8
+ENUMDOC
+  STM8 extract MMSB from 24-bit address.
+
+ENUM
   BFD_RELOC_CKCORE_NONE
 ENUMX
   BFD_RELOC_CKCORE_ADDR32

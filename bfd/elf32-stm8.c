@@ -92,7 +92,7 @@ static reloc_howto_type elf32_stm8_howto_table_1[] = {
          bfd_elf_generic_reloc, /* special_function */
          "R_STM8_24",           /* name */
          false,                 /* partial_inplace */
-         0xff000000,            /* src_mask */
+         0x0,                   /* src_mask */
          0x00ffffff,            /* dst_mask */
          false),                /* pcrel_offset */
 
@@ -124,6 +124,51 @@ static reloc_howto_type elf32_stm8_howto_table_1[] = {
          0x0,                      /* src_mask */
          0xff,                     /* dst_mask */
          true),                    /* pcrel_offset */
+
+  /* lo 8 bit relocation.  */
+  HOWTO (R_STM8_LO8,             /* type */
+         0,                      /* rightshift */
+         0,                      /* size (0 = byte, 1 = short, 2 = long) */
+         8,                      /* bitsize */
+         false,                  /* pc_relative */
+         0,                      /* bitpos */
+         complain_overflow_dont, /* complain_on_overflow */
+         bfd_elf_generic_reloc,  /* special_function */
+         "R_STM8_LO8",           /* name */
+         false,                  /* partial_inplace */
+         0x0,                    /* src_mask */
+         0xff,                   /* dst_mask */
+         false),                 /* pcrel_offset */
+
+  /* hi 8 bit relocation.  */
+  HOWTO (R_STM8_HI8,             /* type */
+         8,                      /* rightshift */
+         0,                      /* size (0 = byte, 1 = short, 2 = long) */
+         8,                      /* bitsize */
+         false,                  /* pc_relative */
+         0,                      /* bitpos */
+         complain_overflow_dont, /* complain_on_overflow */
+         bfd_elf_generic_reloc,  /* special_function */
+         "R_STM8_HI8",           /* name */
+         false,                  /* partial_inplace */
+         0x0,                    /* src_mask */
+         0xff,                   /* dst_mask */
+         false),                 /* pcrel_offset */
+
+  /* hh 8 bit relocation.  */
+  HOWTO (R_STM8_HH8,             /* type */
+         16,                     /* rightshift */
+         0,                      /* size (0 = byte, 1 = short, 2 = long) */
+         8,                      /* bitsize */
+         false,                  /* pc_relative */
+         0,                      /* bitpos */
+         complain_overflow_dont, /* complain_on_overflow */
+         bfd_elf_generic_reloc,  /* special_function */
+         "R_STM8_HH8",           /* name */
+         false,                  /* partial_inplace */
+         0x0,                    /* src_mask */
+         0xff,                   /* dst_mask */
+         false),                 /* pcrel_offset */
 };
 
 // stupid bfd_elf_generic_reloc cant handle 24-bit relocations
@@ -176,9 +221,11 @@ struct elf32_stm8_reloc_map
 
 /* All entries in this list must also be present in elf32_stm8_howto_table.  */
 static const struct elf32_stm8_reloc_map elf32_stm8_reloc_map[] = {
-  { BFD_RELOC_NONE, R_STM8_NONE }, { BFD_RELOC_8, R_STM8_8 },
-  { BFD_RELOC_16, R_STM8_16 },     { BFD_RELOC_24, R_STM8_24 },
-  { BFD_RELOC_32, R_STM8_32 },     { BFD_RELOC_8_PCREL, R_STM8_8_PCREL }
+  { BFD_RELOC_NONE, R_STM8_NONE },    { BFD_RELOC_8, R_STM8_8 },
+  { BFD_RELOC_16, R_STM8_16 },        { BFD_RELOC_24, R_STM8_24 },
+  { BFD_RELOC_32, R_STM8_32 },        { BFD_RELOC_8_PCREL, R_STM8_8_PCREL },
+  { BFD_RELOC_STM8_LO8, R_STM8_LO8 }, { BFD_RELOC_STM8_HI8, R_STM8_HI8 },
+  { BFD_RELOC_STM8_HH8, R_STM8_HH8 },
 };
 
 static reloc_howto_type *
@@ -236,13 +283,130 @@ elf32_stm8_modify_segment_map (bfd *abfd,
   return true;
 }
 
-#define ELF_ARCH bfd_arch_stm8
-#define ELF_TARGET_ID GENERIC_ELF_DATA
-#define ELF_MACHINE_CODE EM_STM8
-#define ELF_MAXPAGESIZE 1
+static int
+elf32_stm8_relocate_section (bfd *output_bfd ATTRIBUTE_UNUSED,
+                             struct bfd_link_info *info, bfd *input_bfd,
+                             asection *input_section, bfd_byte *contents,
+                             Elf_Internal_Rela *relocs,
+                             Elf_Internal_Sym *local_syms,
+                             asection **local_sections)
+{
+  Elf_Internal_Shdr *symtab_hdr;
+  struct elf_link_hash_entry **sym_hashes;
+  Elf_Internal_Rela *rel;
+  Elf_Internal_Rela *relend;
 
-#define TARGET_BIG_SYM stm8_elf32_vec
-#define TARGET_BIG_NAME "elf32-stm8"
+  symtab_hdr = &elf_tdata (input_bfd)->symtab_hdr;
+  sym_hashes = elf_sym_hashes (input_bfd);
+  relend = relocs + input_section->reloc_count;
+
+  for (rel = relocs; rel < relend; rel++)
+    {
+      reloc_howto_type *howto;
+      unsigned long r_symndx;
+      Elf_Internal_Sym *sym;
+      asection *sec;
+      struct elf_link_hash_entry *h;
+      bfd_vma relocation;
+      bfd_reloc_status_type r;
+      const char *name;
+      int r_type;
+
+      r_type = ELF32_R_TYPE (rel->r_info);
+      r_symndx = ELF32_R_SYM (rel->r_info);
+      howto = elf32_stm8_howto_from_type (r_type);
+      h = NULL;
+      sym = NULL;
+      sec = NULL;
+
+      if (r_symndx < symtab_hdr->sh_info)
+        {
+          sym = local_syms + r_symndx;
+          sec = local_sections[r_symndx];
+          relocation = _bfd_elf_rela_local_sym (output_bfd, sym, &sec, rel);
+
+          name = bfd_elf_string_from_elf_section (
+              input_bfd, symtab_hdr->sh_link, sym->st_name);
+          if (name == NULL || name[0] == 0)
+            name = bfd_section_name (sec);
+        }
+      else
+        {
+          bool unresolved_reloc, warned, ignored;
+
+          RELOC_FOR_GLOBAL_SYMBOL (info, input_bfd, input_section, rel,
+                                   r_symndx, symtab_hdr, sym_hashes, h, sec,
+                                   relocation, unresolved_reloc, warned,
+                                   ignored);
+
+          name = h->root.root.string;
+        }
+
+      if (sec != NULL && discarded_section (sec))
+        RELOC_AGAINST_DISCARDED_SECTION (info, input_bfd, input_section, rel,
+                                         1, relend, howto, 0, contents);
+
+      if (bfd_link_relocatable (info))
+        continue;
+
+      if (!howto)
+        {
+          (*info->callbacks->einfo) ("%s unkown reloc type %lu\n", __FILE__,
+                                     r_type);
+          return false;
+        }
+
+#if 0
+    fprintf(stderr,"reloc %s offset=%4.4lx addend=%4.4lx name=%s\n", howto->name, rel->r_offset, rel->r_addend, name);
+#endif
+
+      r = _bfd_final_link_relocate (howto, input_bfd, input_section, contents,
+                                    rel->r_offset, relocation, rel->r_addend);
+
+      if (r != bfd_reloc_ok)
+        {
+          const char *msg = (const char *)NULL;
+
+          switch (r)
+            {
+            case bfd_reloc_overflow:
+              (*info->callbacks->reloc_overflow) (
+                  info, (h ? &h->root : NULL), name, howto->name, (bfd_vma)0,
+                  input_bfd, input_section, rel->r_offset);
+              break;
+
+            case bfd_reloc_undefined:
+              (*info->callbacks->undefined_symbol) (
+                  info, name, input_bfd, input_section, rel->r_offset, true);
+              break;
+
+            case bfd_reloc_outofrange:
+              msg = _ ("internal error: out of range error");
+              break;
+
+            case bfd_reloc_notsupported:
+              msg = _ ("internal error: unsupported relocation error");
+              break;
+
+            case bfd_reloc_dangerous:
+              msg = _ ("internal error: dangerous relocation");
+              break;
+
+            default:
+              msg = _ ("internal error: unknown error");
+              break;
+            }
+
+          if (msg)
+            (*info->callbacks->warning) (info, msg, name, input_bfd,
+                                         input_section, rel->r_offset);
+        }
+    }
+  return true;
+}
+
+#define elf_backend_post_process_headers elf32_stm8_post_process_headers
+#define elf_backend_modify_segment_map elf32_stm8_modify_segment_map
 
 #define elf_info_to_howto elf32_stm8_info_to_howto
 #define elf_info_to_howto_rel NULL
@@ -250,7 +414,19 @@ elf32_stm8_modify_segment_map (bfd *abfd,
 #define elf_backend_init_file_header elf32_stm8_init_file_header
 #define elf_backend_modify_segment_map elf32_stm8_modify_segment_map
 
+#define ELF_ARCH bfd_arch_stm8
+#define ELF_TARGET_ID GENERIC_ELF_DATA
+#define ELF_MACHINE_CODE EM_STM8
+#define ELF_MAXPAGESIZE 1
+#define TARGET_BIG_SYM stm8_elf32_vec
+#define TARGET_BIG_NAME "elf32-stm8"
+
 #define bfd_elf32_bfd_reloc_type_lookup elf32_stm8_reloc_type_lookup
 #define bfd_elf32_bfd_reloc_name_lookup elf32_stm8_reloc_name_lookup
+
+#define elf_backend_can_gc_sections 1
+#define elf_backend_relocate_section elf32_stm8_relocate_section
+#define bfd_elf32_bfd_link_hash_table_create _bfd_elf_link_hash_table_create
+#define bfd_elf32_bfd_final_link bfd_elf_gc_common_final_link
 
 #include "elf32-target.h"

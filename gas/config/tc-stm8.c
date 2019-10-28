@@ -26,6 +26,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
+#include "opcode/stm8.h"
+#include <string.h>
 
 typedef enum
 {
@@ -44,8 +47,30 @@ typedef enum
   OP_PTRW_Y,
   OP_PTRE_X,
   OP_PTRE_Y,
-  OP_REGISTER
+  OP_REGISTER,
+  OP_HI8,
+  OP_LO8,
+  OP_HH8
 } stm8_operand_t;
+
+typedef struct
+{
+  /* Name of the expression modifier allowed with .byte, .word, etc.  */
+  const char *name;
+
+  /* Only allowed with n bytes of data.  */
+  int nbytes;
+
+  /* Associated RELOC.  */
+  bfd_reloc_code_real_type reloc;
+
+  /* Part of the error message.  */
+  const char *error;
+
+  /* Internal operand. */
+  stm8_operand_t op;
+
+} exp_mod_data_t;
 
 static htab_t stm8_hash;
 
@@ -191,6 +216,14 @@ md_begin (void)
       symbol_create ("yh", reg_section, &zero_address_frag, ST8_REG_YH));
 }
 
+const exp_mod_data_t exp_mod_data[] = {
+  /* Default, must be first.  */
+  { "", 0, BFD_RELOC_16, "", OP_ILLEGAL },
+  { "lo8", 1, BFD_RELOC_STM8_LO8, "`lo8' ", OP_LO8 },
+  { "hi8", 1, BFD_RELOC_STM8_HI8, "`hi8' ", OP_HI8 },
+  { "hh8", 1, BFD_RELOC_STM8_HH8, "`hi8' ", OP_HH8 },
+};
+
 static inline char *
 skip_space (char *s)
 {
@@ -321,6 +354,18 @@ md_apply_fix (fixS *fixP, valueT *valP, segT segment ATTRIBUTE_UNUSED)
       *buf++ += val * 2;
       fixP->fx_no_overflow = 1;
       fixP->fx_done = 1;
+      break;
+
+    case BFD_RELOC_STM8_LO8:
+      *buf = 0xff & val;
+      break;
+
+    case BFD_RELOC_STM8_HI8:
+      *buf = (0xff00 & val) >> 8;
+      break;
+
+    case BFD_RELOC_STM8_HH8:
+      *buf = (0xff0000 & val) >> 16;
       break;
 
     default:
@@ -704,6 +749,50 @@ We need to properly handle each of them in order to find a proper opcode. */
       exps->X_md = OP_OFF_SP;
       return 1;
     }
+  else
+    {
+      /* The first entry of exp_mod_data[] contains an entry if no
+        expression modifier is present.  Skip it.  */
+      size_t i;
+
+      for (i = 1; i < ARRAY_SIZE (exp_mod_data); i++)
+        {
+          const exp_mod_data_t *const pexp = &exp_mod_data[i];
+          const size_t len = strlen (pexp->name);
+          const int result = strncasecmp (str, pexp->name, len);
+
+          if (!result)
+            {
+              str += len;
+              while (isspace (*str))
+                str++;
+
+              if (*str == '(')
+                {
+                  input_line_pointer = ++str;
+
+                  expression (exps);
+
+                  if (*input_line_pointer == ')')
+                    {
+                      input_line_pointer++;
+
+                      exps->X_md = pexp->op;
+                      return 1;
+                    }
+                  else
+                    {
+                      as_bad (_ ("`)' required"));
+                      return 0;
+                    }
+                }
+
+              input_line_pointer = str;
+
+              break;
+            }
+        }
+    }
 
   char *p;
   char c;
@@ -819,6 +908,18 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
               fix_new_exp (frag_now, where - 3, 1, &exp[arg], FALSE,
                            BFD_RELOC_STM8_BIT_FLD);
               break;
+            case ST8_LO8:
+              fix_new_exp (frag_now, where, 1, &exp[arg], FALSE,
+                           BFD_RELOC_STM8_LO8);
+              bfd_put_bits (0xaaaaaaaa, frag, 8, true);
+              frag += 1;
+              break;
+            case ST8_HH8:
+              fix_new_exp (frag_now, where, 1, &exp[arg], FALSE,
+                           BFD_RELOC_STM8_HH8);
+              bfd_put_bits (0xaaaaaaaa, frag, 8, true);
+              frag += 1;
+              break;
             default:
               break;
             }
@@ -932,6 +1033,18 @@ cmpspec (stm8_addr_mode_t addr_mode[], expressionS exps[], int count)
           if (addr_mode[i] == ST8_SHORTMEM)
             continue;
           break;
+        case OP_LO8:
+          if (addr_mode[i] == ST8_LO8)
+            continue;
+          break;
+        case OP_HI8:
+          if (addr_mode[i] == ST8_HI8)
+            continue;
+          break;
+        case OP_HH8:
+          if (addr_mode[i] == ST8_HH8)
+            continue;
+          break;
         case OP_ILLEGAL:
           as_fatal (_ ("BUG: OP_ILLEGAL"));
           return 1;
@@ -961,7 +1074,7 @@ md_assemble (char *str)
 
   int count = read_args (str, exps);
   struct stm8_opcodes_s *opcode
-      = (struct stm8_opcodes_s *)str_hash_find (stm8_hash, op);
+      = (struct stm8_opcodes_s *)htab_find (stm8_hash, op);
 
   if (opcode == NULL)
     {
@@ -985,9 +1098,9 @@ md_assemble (char *str)
             if ((opcode[i].bin_opcode == 0x35)
                 || (opcode[i].bin_opcode == 0x45)
                 || (opcode[i].bin_opcode == 0x55))
-            {
-              count = -count;
-            }
+              {
+                count = -count;
+              }
             stm8_bfd_out (opcode[i], exps, count, frag);
             break;
           }
@@ -1015,8 +1128,6 @@ md_pcrel_from_section (fixS *fixp, segT sec)
     return 0;
 
   return fixp->fx_size + fixp->fx_where + fixp->fx_frag->fr_address;
-  // return fixp->fx_frag->fr_address+fixp->fx_frag->fr_fix;
-  return fixp->fx_frag->fr_address + fixp->fx_where;
 }
 
 int

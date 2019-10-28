@@ -40,7 +40,7 @@
 
 /* You should define this macro to be non-zero if the target is big
    endian, and zero if the target is little endian.  */
-#define TARGET_BYTES_BIG_ENDIAN 0
+#define TARGET_BYTES_BIG_ENDIAN 1
 
 /* If you define this macro, GAS will warn about the use of
    nonstandard escape sequences in a string.  */

@@ -326,6 +326,33 @@ stm8_operands (char *s, unsigned char buf[], stm8_addr_mode_t arg)
         sprintf (s, "(0x%6.6x,Y)", val);
       return 3;
       break;
+    case ST8_HI8:
+      val = buf[0];
+      sym = find_symbol (val);
+      if (sym)
+        sprintf (s, "hi8(#%s)", sym);
+      else
+        sprintf (s, "hi8(#0x%2.2x)", val);
+      return 2;
+      break;
+    case ST8_LO8:
+      val = buf[0];
+      sym = find_symbol (val);
+      if (sym)
+        sprintf (s, "lo8(#%s)", sym);
+      else
+        sprintf (s, "lo8(#0x%2.2x)", val);
+      return 2;
+      break;
+    case ST8_HH8:
+      val = buf[0];
+      sym = find_symbol (val);
+      if (sym)
+        sprintf (s, "hh8(#%s)", sym);
+      else
+        sprintf (s, "hh8(#0x%4.4x)", val);
+      return 3;
+      break;
     case ST8_END:
       break;
     }

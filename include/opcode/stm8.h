@@ -64,7 +64,10 @@ typedef enum
   ST8_LONGPTRW_Y,
   ST8_LONGPTRE,
   ST8_LONGPTRE_X,
-  ST8_LONGPTRE_Y
+  ST8_LONGPTRE_Y,
+  ST8_HI8,
+  ST8_LO8,
+  ST8_HH8
 } stm8_addr_mode_t;
 
 struct stm8_opcodes_s

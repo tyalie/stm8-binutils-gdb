@@ -7308,6 +7308,15 @@ enum bfd_reloc_code_real
   /* STM8 bit field immediate for BTJx, BCPL, BSET, BRES  instruction.  */
   BFD_RELOC_STM8_BIT_FLD,
 
+  /* STM8 extract LSB from word.  */
+  BFD_RELOC_STM8_LO8,
+
+  /* STM8 extract MSB from word.  */
+  BFD_RELOC_STM8_HI8,
+
+  /* STM8 extract MMSB from 24-bit address.  */
+  BFD_RELOC_STM8_HH8,
+
   /* C-SKY relocations.  */
   BFD_RELOC_CKCORE_NONE,
   BFD_RELOC_CKCORE_ADDR32,
