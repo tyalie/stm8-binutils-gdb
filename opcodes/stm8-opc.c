@@ -83,7 +83,14 @@ const struct stm8_opcodes_s stm8_opcodes[] = {
   { "and", { ST8_REG_A, ST8_LONGPTRW_X }, 0x72D4 },
   { "and", { ST8_REG_A, ST8_SHORTPTRW_Y }, 0x91D4 },
   // bccm
-  //{"bccm", {ST8_LONGMEM, ST8_BYTE}, 0x90xx},
+  { "bccm", { ST8_LONGMEM, ST8_BIT_0 }, 0x9011 },
+  { "bccm", { ST8_LONGMEM, ST8_BIT_1 }, 0x9013 },
+  { "bccm", { ST8_LONGMEM, ST8_BIT_2 }, 0x9015 },
+  { "bccm", { ST8_LONGMEM, ST8_BIT_3 }, 0x9017 },
+  { "bccm", { ST8_LONGMEM, ST8_BIT_4 }, 0x9019 },
+  { "bccm", { ST8_LONGMEM, ST8_BIT_5 }, 0x901b },
+  { "bccm", { ST8_LONGMEM, ST8_BIT_6 }, 0x901d },
+  { "bccm", { ST8_LONGMEM, ST8_BIT_7 }, 0x901f },
   // bcp
   { "bcp", { ST8_REG_A, ST8_BYTE }, 0xA5 },
   { "bcp", { ST8_REG_A, ST8_SHORTMEM }, 0xB5 },
