@@ -38,15 +38,20 @@ typedef enum
   OP_MEM,
   OP_INDX,
   OP_INDY,
+  OP_SOFF_X,
   OP_OFF_X,
+  OP_SOFF_Y,
   OP_OFF_Y,
-  OP_OFF_SP,
-  OP_PTRW,
-  OP_PTRE,
-  OP_PTRW_X,
-  OP_PTRW_Y,
-  OP_PTRE_X,
-  OP_PTRE_Y,
+  OP_SOFF_SP,
+  OP_SPTRW,
+  OP_LPTRW,
+  OP_LPTRE,
+  OP_SPTRW_X,
+  OP_LPTRW_X,
+  OP_SPTRW_Y,
+  OP_LPTRW_Y,
+  OP_LPTRE_X,
+  OP_LPTRE_Y,
   OP_REGISTER,
   OP_HI8,
   OP_LO8,
@@ -564,8 +569,13 @@ read_arg_ptr (char *str, expressionS *exps)
       s++;
       input_line_pointer = s;
 
-      /* first eat up .w and .e */
-      if ((p = strstr (s, ".w]")))
+      /* first eat up .s .w and .e */
+      if ((p = strstr (s, ".s]")))
+        {
+          c = *p;
+          *p = 0;
+        }
+      else if ((p = strstr (s, ".w]")))
         {
           c = *p;
           *p = 0;
@@ -589,6 +599,11 @@ read_arg_ptr (char *str, expressionS *exps)
           input_line_pointer += 1;
           return 2;
         }
+      if ((*input_line_pointer == '.') && (*(input_line_pointer + 1) == 's'))
+        {
+          input_line_pointer += 2;
+          return 1;
+        }
       else if ((*input_line_pointer == '.')
                && (*(input_line_pointer + 1) == 'w'))
         {
@@ -603,11 +618,55 @@ read_arg_ptr (char *str, expressionS *exps)
         }
       else
         {
-          as_bad ("Expected ']' or '.e' or '.w' but found '%c'",
+          as_bad ("Expected ']' or '.s' or .e' or '.w' but found '%c'",
                   *input_line_pointer);
           return -1;
         }
     }
+  return 0;
+}
+
+static int
+read_arg_idx (char *str, expressionS *exps)
+{
+  char *s;
+  char *p;
+  char c;
+
+  s = str;
+  input_line_pointer = s;
+
+  /* first eat up .s */
+  if ((p = strstr (s, ".s")))
+    {
+      c = *p;
+      *p = 0;
+    }
+
+  expression (exps);
+  DEBUG_TRACE_EXPR (exps);
+
+  /* restore c */
+  if (p)
+    *p = c;
+
+  // return default offset len
+  if (*input_line_pointer == ',')
+    {
+      input_line_pointer += 1;
+      return 2;
+    }
+  else if ((*input_line_pointer == '.') && (*(input_line_pointer + 1) == 's'))
+    {
+      input_line_pointer += 2;
+      return 1;
+    }
+  else
+    {
+      as_bad ("Expected ',' or '.s' but found '%c'", *input_line_pointer);
+      return -1;
+    }
+
   return 0;
 }
 
@@ -624,7 +683,20 @@ toupperstr (char *str)
   return str;
 }
 
-// expressionS last_exp;
+char *strend (const char *str, const char *cmp);
+
+char *
+strend (const char *str, const char *cmp)
+{
+  str = strrchr (str, cmp[0]);
+
+  if (str != NULL)
+    if (!strcmp (str, cmp))
+      return (char *)str;
+
+  return (0);
+}
+
 /* In: argument
    Out: value
    Modifies: type */
@@ -659,14 +731,19 @@ We need to properly handle each of them in order to find a proper opcode. */
       ret = read_arg_ptr (str, exps);
       if (ret > 0)
         {
+          if (ret == 1)
+            {
+              exps->X_md = OP_SPTRW;
+              return 1;
+            }
           if (ret == 2)
             {
-              exps->X_md = OP_PTRW;
+              exps->X_md = OP_LPTRW;
               return 1;
             }
           if (ret == 3)
             {
-              exps->X_md = OP_PTRE;
+              exps->X_md = OP_LPTRE;
               return 1;
             }
         }
@@ -693,24 +770,38 @@ We need to properly handle each of them in order to find a proper opcode. */
       if (str[0] == '[')
         {
           ret = read_arg_ptr (str, exps);
+          if (ret == 1)
+            {
+              exps->X_md = OP_SPTRW_X;
+            }
           if (ret == 2)
             {
-              exps->X_md = OP_PTRW_X;
+              exps->X_md = OP_LPTRW_X;
               return 1;
             }
           if (ret == 3)
             {
-              exps->X_md = OP_PTRE_X;
+              exps->X_md = OP_LPTRE_X;
               return 1;
             }
           return 0;
         }
-      str = strtok (str, ",");
-      input_line_pointer = str;
-      expression (exps);
-      DEBUG_TRACE_EXPR (exps);
-      exps->X_md = OP_OFF_X;
-      return 1;
+
+      else
+        {
+          ret = read_arg_idx (str, exps);
+          if (ret == 1)
+            {
+              exps->X_md = OP_SOFF_X;
+              return 1;
+            }
+          if (ret == 2)
+            {
+              exps->X_md = OP_OFF_X;
+              return 1;
+            }
+        }
+      return 0;
     }
   // offset,Y
   else if ((str[0] == '(') && (strstr (strx, ",Y)")))
@@ -719,35 +810,49 @@ We need to properly handle each of them in order to find a proper opcode. */
       if (str[0] == '[')
         {
           ret = read_arg_ptr (str, exps);
+          if (ret == 1)
+            {
+              exps->X_md = OP_SPTRW_Y;
+              return 1;
+            }
           if (ret == 2)
             {
-              exps->X_md = OP_PTRW_Y;
+              exps->X_md = OP_LPTRW_Y;
               return 1;
             }
           if (ret == 3)
             {
-              exps->X_md = OP_PTRE_Y;
+              exps->X_md = OP_LPTRE_Y;
               return 1;
             }
           return 0;
         }
-      str = strtok (str, ",");
-      input_line_pointer = str;
-      expression (exps);
-      DEBUG_TRACE_EXPR (exps);
-      exps->X_md = OP_OFF_Y;
-      return 1;
+      else
+        {
+          ret = read_arg_idx (str, exps);
+          if (ret == 1)
+            {
+              exps->X_md = OP_SOFF_Y;
+              return 1;
+            }
+          if (ret == 2)
+            {
+              exps->X_md = OP_OFF_Y;
+              return 1;
+            }
+        }
     }
   // offset,SP
   else if ((str[0] == '(') && (strstr (strx, ",SP)")))
     {
       str++;
-      str = strtok (str, ",");
-      input_line_pointer = str;
-      expression (exps);
-      DEBUG_TRACE_EXPR (exps);
-      exps->X_md = OP_OFF_SP;
-      return 1;
+      ret = read_arg_idx (str, exps);
+      if (ret > 0)
+        {
+          exps->X_md = OP_SOFF_SP;
+          return 1;
+        }
+      return 0;
     }
   else
     {
@@ -764,7 +869,7 @@ We need to properly handle each of them in order to find a proper opcode. */
           if (!result)
             {
               str += len;
-              while (isspace (*str))
+              while (isspace ((int)*str))
                 str++;
 
               if (*str == '(')
@@ -795,17 +900,13 @@ We need to properly handle each of them in order to find a proper opcode. */
     }
 
   char *p;
-  char c;
-  if ((p = strstr (str, ".short")))
+  if ((p = strend (str, ".s")))
     {
-      c = *p;
       *p = 0;
       exps->X_md = OP_SHORTMEM;
       input_line_pointer = str;
       expression (exps);
       DEBUG_TRACE_EXPR (exps);
-      *p = c;
-      input_line_pointer += 6;
       return 1;
     }
 
@@ -852,6 +953,7 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
   int arg = 0;
   int dir = 1;
 
+  /* if count is negative the arguments are reversed */
   if (count < 0)
     {
       count = -count;
@@ -877,6 +979,8 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
             case ST8_LONGPTRW_Y:
             case ST8_LONGPTRW_X:
             case ST8_LONGPTRW:
+            case ST8_LONGPTRE_Y:
+            case ST8_LONGPTRE_X:
             case ST8_LONGPTRE:
             case ST8_LONGOFF_Y:
             case ST8_LONGOFF_X:
@@ -907,6 +1011,12 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
             case ST8_BIT_0:
               fix_new_exp (frag_now, where - 3, 1, &exp[arg], FALSE,
                            BFD_RELOC_STM8_BIT_FLD);
+              break;
+            case ST8_HI8:
+              fix_new_exp (frag_now, where, 1, &exp[arg], FALSE,
+                           BFD_RELOC_STM8_HI8);
+              bfd_put_bits (0xaaaaaaaa, frag, 8, true);
+              frag += 1;
               break;
             case ST8_LO8:
               fix_new_exp (frag_now, where, 1, &exp[arg], FALSE,
@@ -966,6 +1076,10 @@ cmpspec (stm8_addr_mode_t addr_mode[], expressionS exps[], int count)
           if (addr_mode[i] == ST8_INDY)
             continue;
           break;
+        case OP_SOFF_X:
+          if (addr_mode[i] == ST8_SHORTOFF_X)
+            continue;
+          break;
         case OP_OFF_X:
           if (addr_mode[i] == ST8_SHORTOFF_X)
             if (value < 0x100)
@@ -973,6 +1087,10 @@ cmpspec (stm8_addr_mode_t addr_mode[], expressionS exps[], int count)
           if (addr_mode[i] == ST8_LONGOFF_X)
             continue;
           if (addr_mode[i] == ST8_EXTOFF_X)
+            continue;
+          break;
+        case OP_SOFF_Y:
+          if (addr_mode[i] == ST8_SHORTOFF_Y)
             continue;
           break;
         case OP_OFF_Y:
@@ -984,40 +1102,43 @@ cmpspec (stm8_addr_mode_t addr_mode[], expressionS exps[], int count)
           if (addr_mode[i] == ST8_EXTOFF_Y)
             continue;
           break;
-        case OP_OFF_SP:
+        case OP_SOFF_SP:
           if (addr_mode[i] == ST8_SHORTOFF_SP)
             continue;
           break;
-        case OP_PTRW:
+        case OP_SPTRW:
           if (addr_mode[i] == ST8_SHORTPTRW)
-            if (value < 0x100)
-              continue;
+            continue;
+          break;
+        case OP_LPTRW:
           if (addr_mode[i] == ST8_LONGPTRW)
             continue;
           break;
-        case OP_PTRW_X:
+        case OP_SPTRW_X:
           if (addr_mode[i] == ST8_SHORTPTRW_X)
-            if (value < 0x100)
-              continue;
+            continue;
+          break;
+        case OP_LPTRW_X:
           if (addr_mode[i] == ST8_LONGPTRW_X)
             continue;
           break;
-        case OP_PTRW_Y:
+        case OP_SPTRW_Y:
           if (addr_mode[i] == ST8_SHORTPTRW_Y)
-            if (value < 0x100)
-              continue;
+            continue;
+          break;
+        case OP_LPTRW_Y:
           if (addr_mode[i] == ST8_LONGPTRW_Y)
             continue;
           break;
-        case OP_PTRE:
+        case OP_LPTRE:
           if (addr_mode[i] == ST8_LONGPTRE)
             continue;
           break;
-        case OP_PTRE_X:
+        case OP_LPTRE_X:
           if (addr_mode[i] == ST8_LONGPTRE_X)
             continue;
           break;
-        case OP_PTRE_Y:
+        case OP_LPTRE_Y:
           if (addr_mode[i] == ST8_LONGPTRE_Y)
             continue;
           break;

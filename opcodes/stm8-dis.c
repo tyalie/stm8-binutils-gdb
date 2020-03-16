@@ -153,7 +153,7 @@ stm8_operands (char *s, unsigned char buf[], stm8_addr_mode_t arg)
       val = buf[0];
       sym = find_symbol (val);
       if (sym)
-        sprintf (s, "%s", sym);
+        sprintf (s, "%s.s", sym);
       else
         sprintf (s, "0x%2.2x", val);
       return 1;
@@ -165,7 +165,7 @@ stm8_operands (char *s, unsigned char buf[], stm8_addr_mode_t arg)
       val = buf[0];
       sym = find_symbol (val);
       if (sym)
-        sprintf (s, "(%s,X)", sym);
+        sprintf (s, "(%s.s,X)", sym);
       else
         sprintf (s, "(0x%2.2x,X)", val);
       return 1;
@@ -177,7 +177,7 @@ stm8_operands (char *s, unsigned char buf[], stm8_addr_mode_t arg)
       val = buf[0];
       sym = find_symbol (val);
       if (sym)
-        sprintf (s, "(%s,Y)", sym);
+        sprintf (s, "(%s.s,Y)", sym);
       else
         sprintf (s, "(0x%2.2x,Y)", val);
       return 1;
@@ -195,27 +195,27 @@ stm8_operands (char *s, unsigned char buf[], stm8_addr_mode_t arg)
       val = buf[0];
       sym = find_symbol (val);
       if (sym)
-        sprintf (s, "[%s.w]", sym);
+        sprintf (s, "[%s.s]", sym);
       else
-        sprintf (s, "[0x%2.2x.w]", val);
+        sprintf (s, "[0x%2.2x]", val);
       return 1;
       break;
     case ST8_SHORTPTRW_X:
       val = buf[0];
       sym = find_symbol (val);
       if (sym)
-        sprintf (s, "([%s.w],X)", sym);
+        sprintf (s, "([%s.s],X)", sym);
       else
-        sprintf (s, "([0x%2.2x.w],X)", val);
+        sprintf (s, "([0x%2.2x],X)", val);
       return 1;
       break;
     case ST8_SHORTPTRW_Y:
       val = buf[0];
       sym = find_symbol (val);
       if (sym)
-        sprintf (s, "([%s.w],Y)", sym);
+        sprintf (s, "([%s.s],Y)", sym);
       else
-        sprintf (s, "([0x%2.2x.w],Y)", val);
+        sprintf (s, "([0x%2.2x],Y)", val);
       return 1;
       break;
     case ST8_LONGMEM:
@@ -301,6 +301,8 @@ stm8_operands (char *s, unsigned char buf[], stm8_addr_mode_t arg)
       break;
     case ST8_EXTMEM:
       val = (buf[0] << 16) + (buf[1] << 8) + buf[2];
+      //		if (find_symbol_x(val))
+      //			dinfo->print_address_func(val,dinfo);
       sym = find_symbol (val);
       if (sym)
         sprintf (s, "%s", sym);
