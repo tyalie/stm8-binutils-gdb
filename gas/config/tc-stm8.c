@@ -970,6 +970,18 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
           switch (op.constraints[arg])
             {
             case ST8_EXTMEM:
+            case ST8_REG_CC:
+            case ST8_REG_A:
+            case ST8_REG_X:
+            case ST8_REG_Y:
+            case ST8_REG_SP:
+            case ST8_REG_XL:
+            case ST8_REG_XH:
+            case ST8_REG_YL:
+            case ST8_REG_YH:
+            case ST8_INDX:
+            case ST8_INDY:
+              break;
             case ST8_EXTOFF_X:
             case ST8_EXTOFF_Y:
               fix_new_exp (frag_now, where, 3, &exp[arg], FALSE, BFD_RELOC_24);
@@ -1009,6 +1021,13 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
               frag += 1;
               break;
             case ST8_BIT_0:
+            case ST8_BIT_1:
+            case ST8_BIT_2:
+            case ST8_BIT_3:
+            case ST8_BIT_4:
+            case ST8_BIT_5:
+            case ST8_BIT_6:
+            case ST8_BIT_7:
               fix_new_exp (frag_now, where - 3, 1, &exp[arg], FALSE,
                            BFD_RELOC_STM8_BIT_FLD);
               break;
@@ -1030,7 +1049,8 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
               bfd_put_bits (0xaaaaaaaa, frag, 8, true);
               frag += 1;
               break;
-            default:
+            case ST8_END:
+              as_fatal (_ ("BUG: illigal op constraint"));
               break;
             }
         }
@@ -1065,6 +1085,9 @@ cmpspec (stm8_addr_mode_t addr_mode[], expressionS exps[], int count)
             continue;
           if (addr_mode[i] == ST8_WORD)
             continue;
+          /* for bit immidiate operand it is important to only match the opcode
+            with ST8_BIT_0 operand. We will later fix the insn bit value in
+            BFD_RELOC_STM8_BIT_FLD */
           if (addr_mode[i] == ST8_BIT_0)
             continue;
           break;
