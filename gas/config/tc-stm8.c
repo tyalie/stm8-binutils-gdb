@@ -264,8 +264,6 @@ extract_word (char *from, char *to, int limit)
 void
 md_operand (expressionS *exp __attribute__ ((unused)))
 {
-  /* In case of a syntax error, escape back to try next syntax combo.  */
-  as_bad (_ ("stm8: call to md_operand"));
 }
 
 /* Attempt to simplify or eliminate a fixup. To indicate that a fixup
@@ -362,15 +360,21 @@ md_apply_fix (fixS *fixP, valueT *valP, segT segment ATTRIBUTE_UNUSED)
       break;
 
     case BFD_RELOC_STM8_LO8:
-      *buf = 0xff & val;
+      fixP->fx_no_overflow = 1;
+      if (!fixP->fx_addsy)
+        *buf = 0xff & val;
       break;
 
     case BFD_RELOC_STM8_HI8:
-      *buf = (0xff00 & val) >> 8;
+      fixP->fx_no_overflow = 1;
+      if (!fixP->fx_addsy)
+        *buf = (0xff00 & val) >> 8;
       break;
 
     case BFD_RELOC_STM8_HH8:
-      *buf = (0xff0000 & val) >> 16;
+      fixP->fx_no_overflow = 1;
+      if (!fixP->fx_addsy)
+        *buf = (0xff0000 & val) >> 16;
       break;
 
     default:
@@ -773,6 +777,7 @@ We need to properly handle each of them in order to find a proper opcode. */
           if (ret == 1)
             {
               exps->X_md = OP_SPTRW_X;
+              return 1;
             }
           if (ret == 2)
             {
@@ -784,7 +789,6 @@ We need to properly handle each of them in order to find a proper opcode. */
               exps->X_md = OP_LPTRE_X;
               return 1;
             }
-          return 0;
         }
 
       else
@@ -825,7 +829,6 @@ We need to properly handle each of them in order to find a proper opcode. */
               exps->X_md = OP_LPTRE_Y;
               return 1;
             }
-          return 0;
         }
       else
         {
@@ -841,6 +844,7 @@ We need to properly handle each of them in order to find a proper opcode. */
               return 1;
             }
         }
+      return 0;
     }
   // offset,SP
   else if ((str[0] == '(') && (strstr (strx, ",SP)")))
@@ -883,6 +887,14 @@ We need to properly handle each of them in order to find a proper opcode. */
                       input_line_pointer++;
 
                       exps->X_md = pexp->op;
+
+                      if (*input_line_pointer)
+                        {
+                          as_bad (_ ("garbage in operand '%s'"),
+                                  input_line_pointer);
+                          return 0;
+                        }
+
                       return 1;
                     }
                   else
@@ -891,8 +903,6 @@ We need to properly handle each of them in order to find a proper opcode. */
                       return 0;
                     }
                 }
-
-              input_line_pointer = str;
 
               break;
             }
@@ -969,7 +979,6 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
         {
           switch (op.constraints[arg])
             {
-            case ST8_EXTMEM:
             case ST8_REG_CC:
             case ST8_REG_A:
             case ST8_REG_X:
@@ -982,6 +991,7 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
             case ST8_INDX:
             case ST8_INDY:
               break;
+            case ST8_EXTMEM:
             case ST8_EXTOFF_X:
             case ST8_EXTOFF_Y:
               fix_new_exp (frag_now, where, 3, &exp[arg], FALSE, BFD_RELOC_24);
@@ -1010,7 +1020,18 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
             case ST8_SHORTOFF_SP:
             case ST8_BYTE:
             case ST8_SHORTMEM:
-              fix_new_exp (frag_now, where, 1, &exp[arg], FALSE, BFD_RELOC_8);
+              if (exp[arg].X_md == OP_LO8)
+                fix_new_exp (frag_now, where, 1, &exp[arg], FALSE,
+                             BFD_RELOC_STM8_LO8);
+              else if (exp[arg].X_md == OP_HI8)
+                fix_new_exp (frag_now, where, 1, &exp[arg], FALSE,
+                             BFD_RELOC_STM8_HI8);
+              else if (exp[arg].X_md == OP_HH8)
+                fix_new_exp (frag_now, where, 1, &exp[arg], FALSE,
+                             BFD_RELOC_STM8_HH8);
+              else
+                fix_new_exp (frag_now, where, 1, &exp[arg], FALSE,
+                             BFD_RELOC_8);
               bfd_put_bits (0xaaaaaaaa, frag, 8, true);
               frag += 1;
               break;
@@ -1030,24 +1051,6 @@ stm8_bfd_out (struct stm8_opcodes_s op, expressionS exp[], int count,
             case ST8_BIT_7:
               fix_new_exp (frag_now, where - 3, 1, &exp[arg], FALSE,
                            BFD_RELOC_STM8_BIT_FLD);
-              break;
-            case ST8_HI8:
-              fix_new_exp (frag_now, where, 1, &exp[arg], FALSE,
-                           BFD_RELOC_STM8_HI8);
-              bfd_put_bits (0xaaaaaaaa, frag, 8, true);
-              frag += 1;
-              break;
-            case ST8_LO8:
-              fix_new_exp (frag_now, where, 1, &exp[arg], FALSE,
-                           BFD_RELOC_STM8_LO8);
-              bfd_put_bits (0xaaaaaaaa, frag, 8, true);
-              frag += 1;
-              break;
-            case ST8_HH8:
-              fix_new_exp (frag_now, where, 1, &exp[arg], FALSE,
-                           BFD_RELOC_STM8_HH8);
-              bfd_put_bits (0xaaaaaaaa, frag, 8, true);
-              frag += 1;
               break;
             case ST8_END:
               as_fatal (_ ("BUG: illigal op constraint"));
@@ -1178,15 +1181,9 @@ cmpspec (stm8_addr_mode_t addr_mode[], expressionS exps[], int count)
             continue;
           break;
         case OP_LO8:
-          if (addr_mode[i] == ST8_LO8)
-            continue;
-          break;
         case OP_HI8:
-          if (addr_mode[i] == ST8_HI8)
-            continue;
-          break;
         case OP_HH8:
-          if (addr_mode[i] == ST8_HH8)
+          if (addr_mode[i] == ST8_BYTE)
             continue;
           break;
         case OP_ILLEGAL:

@@ -495,9 +495,6 @@ const struct stm8_opcodes_s stm8_opcodes[] = {
   { "push", { ST8_REG_CC }, 0x8A },
   { "push", { ST8_BYTE }, 0x4B },
   { "push", { ST8_LONGMEM }, 0x3B },
-  { "push", { ST8_HI8 }, 0x4B },
-  { "push", { ST8_LO8 }, 0x4B },
-  { "push", { ST8_HH8 }, 0x4B },
   // pushw
   { "pushw", { ST8_REG_X }, 0x89 },
   { "pushw", { ST8_REG_Y }, 0x9089 },
@@ -776,8 +773,6 @@ stm8_compute_insn_size (struct stm8_opcodes_s opcode)
         case ST8_SHORTOFF_X:
         case ST8_SHORTOFF_Y:
         case ST8_SHORTOFF_SP:
-        case ST8_LO8:
-        case ST8_HI8:
           ret++;
           break;
         case ST8_LONGPTRE_Y:
@@ -795,7 +790,6 @@ stm8_compute_insn_size (struct stm8_opcodes_s opcode)
         case ST8_EXTMEM:
         case ST8_EXTOFF_X:
         case ST8_EXTOFF_Y:
-        case ST8_HH8:
           ret += 3;
           break;
         case ST8_END:
