@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<!-- Copyright (C) 2009-2024 Free Software Foundation, Inc.
+     Contributed by Sophie 'Tyalie' Friedrich
+
+     Copying and distribution of this file, with or without modification,
+     are permitted in any medium without royalty provided the copyright
+     notice and this notice are preserved.  -->
+
+<!DOCTYPE feature SYSTEM "gdb-target.dtd">
+<feature name="org.gnu.gdb.stm8.core">
+  <reg name="a" bitsize="8"/>
+  <reg name="x" bitsize="16"/>
+  <reg name="y" bitsize="16"/>
+  <reg name="sp" bitsize="16" type="data_ptr"/>
+  <reg name="pc" bitsize="24" type="code_ptr"/>
+
+  <flags id="cc_flags" size="1">
+    <!-- Carry -->
+    <field name="C" start="0" end="0"/>
+    <!-- Zero -->
+    <field name="Z" start="1" end="1"/>
+    <!-- Negative -->
+    <field name="N" start="2" end="2"/>
+
+    <!-- interrupt mask level 0 -->
+    <field name="I0" start="3" end="3"/>
+    <!-- Half Carry -->
+    <field name="H" start="4" end="4"/>
+    <!-- interrupt mask level 1 -->
+    <field name="I1" start="5" end="5"/>
+
+    <!-- Overflow -->
+    <field name="V" start="7" end="7"/>
+  </flags>
+  <reg name="cc" bitsize="8" />
+
+</feature>

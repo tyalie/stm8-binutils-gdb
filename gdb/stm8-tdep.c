@@ -92,15 +92,15 @@ static int
 stm8_convert_register_p (struct gdbarch *gdbarch, int regnum,
                          struct type *type)
 {
-  if ((regnum == STM8_SP_REGNUM) && (type->length() > 2))
+  if ((regnum == STM8_SP_REGNUM) && (type->length () > 2))
     {
       return 1;
     }
-  if ((regnum == STM8_X_REGNUM) && (type->length() > 2))
+  if ((regnum == STM8_X_REGNUM) && (type->length () > 2))
     {
       return 1;
     }
-  if ((regnum == STM8_Y_REGNUM) && (type->length() > 2))
+  if ((regnum == STM8_Y_REGNUM) && (type->length () > 2))
     {
       return 1;
     }
@@ -119,9 +119,9 @@ stm8_register_to_value (frame_info_ptr frame, int regnum, struct type *type,
 
   memset (to, 0, type->length ());
 
-  if (!get_frame_register_bytes (frame, regnum, 0, 
-				 { to + type->length() - 2, 2},
-                                 optimizedp, unavailablep))
+  if (!get_frame_register_bytes (frame, regnum, 0,
+                                 { to + type->length () - 2, 2 }, optimizedp,
+                                 unavailablep))
     return 0;
 
   *optimizedp = *unavailablep = 0;
@@ -133,17 +133,17 @@ stm8_get_producer ()
 {
   if (current_program_space != NULL)
     {
-      for (objfile *objfile : current_program_space->objfiles() )
-      {
-	for (compunit_symtab *cust : objfile->compunits() ) 
-	{
-	  if (cust && cust->producer() != NULL
-	      && startswith (cust->producer(), "SDCC"))
-          {
-            return SDCC_PRODUCER;
-          }
-	}
-      }
+      for (objfile *objfile : current_program_space->objfiles ())
+        {
+          for (compunit_symtab *cust : objfile->compunits ())
+            {
+              if (cust && cust->producer () != NULL
+                  && startswith (cust->producer (), "SDCC"))
+                {
+                  return SDCC_PRODUCER;
+                }
+            }
+        }
     }
   return GCC_PRODUCER;
 }
@@ -253,7 +253,8 @@ stm8_pseudo_register_write (struct gdbarch *gdbarch, struct regcache *regcache,
     {
 
     case STM8_XH_REGNUM:
-      status = regcache_raw_read_unsigned (regcache, STM8_X_REGNUM, (ULONGEST*)tmp);
+      status = regcache_raw_read_unsigned (regcache, STM8_X_REGNUM,
+                                           (ULONGEST *)tmp);
       if (status == REG_VALID)
         {
           tmp[0] = buf[0];
@@ -262,7 +263,8 @@ stm8_pseudo_register_write (struct gdbarch *gdbarch, struct regcache *regcache,
       return;
 
     case STM8_XL_REGNUM:
-      status = regcache_raw_read_unsigned (regcache, STM8_X_REGNUM, (ULONGEST*)tmp);
+      status = regcache_raw_read_unsigned (regcache, STM8_X_REGNUM,
+                                           (ULONGEST *)tmp);
       if (status == REG_VALID)
         {
           tmp[1] = buf[0];
@@ -271,7 +273,8 @@ stm8_pseudo_register_write (struct gdbarch *gdbarch, struct regcache *regcache,
       return;
 
     case STM8_YH_REGNUM:
-      status = regcache_raw_read_unsigned (regcache, STM8_Y_REGNUM, (ULONGEST*)tmp);
+      status = regcache_raw_read_unsigned (regcache, STM8_Y_REGNUM,
+                                           (ULONGEST *)tmp);
       if (status == REG_VALID)
         {
           tmp[0] = buf[0];
@@ -280,7 +283,8 @@ stm8_pseudo_register_write (struct gdbarch *gdbarch, struct regcache *regcache,
       return;
 
     case STM8_YL_REGNUM:
-      status = regcache_raw_read_unsigned (regcache, STM8_Y_REGNUM, (ULONGEST*)tmp);
+      status = regcache_raw_read_unsigned (regcache, STM8_Y_REGNUM,
+                                           (ULONGEST *)tmp);
       if (status == REG_VALID)
         {
           tmp[1] = buf[0];
@@ -293,7 +297,6 @@ stm8_pseudo_register_write (struct gdbarch *gdbarch, struct regcache *regcache,
       return;
     }
 }
-
 
 struct stm8_frame_cache
 {
@@ -419,7 +422,7 @@ stm8_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame)
   gdb_byte buf[4];
   CORE_ADDR pc;
 
-  struct stm8_gdbarch_tdep *tdep = gdbarch_tdep<stm8_gdbarch_tdep>(gdbarch);
+  struct stm8_gdbarch_tdep *tdep = gdbarch_tdep<stm8_gdbarch_tdep> (gdbarch);
   frame_unwind_register (next_frame, STM8_PC_REGNUM, buf);
   if (frame_relative_level (next_frame) < 0)
     pc = extract_typed_address (buf, builtin_type (gdbarch)->builtin_func_ptr);
@@ -725,20 +728,19 @@ stm8_frame_cache (frame_info_ptr next_frame, void **this_cache)
 
   cache->base = current_sp;
   if (cache->return_kind == RETURN_IRET)
-    cache->saved_regs[STM8_PC_REGNUM].set_addr(cache->base + 1 + 6);
+    cache->saved_regs[STM8_PC_REGNUM].set_addr (cache->base + 1 + 6);
   else
-    cache->saved_regs[STM8_PC_REGNUM].set_addr(cache->base + 1);
-  cache->saved_regs[STM8_SP_REGNUM].set_value(cache->base + retsize);
+    cache->saved_regs[STM8_PC_REGNUM].set_addr (cache->base + 1);
+  cache->saved_regs[STM8_SP_REGNUM].set_value (cache->base + retsize);
 
   if (stm8_debug)
     {
-      gdb_printf (
-          gdb_stdlog,
-          "stm8_frame_cache: base=%4.4lx curr_pc=%4.4lx "
-          "curr_sp=%4.4lx framesize=%4.4x stackadj=%4.4x retsize=%d\n",
-          (unsigned long)cache->base, (unsigned long)current_pc,
-          (unsigned long)current_sp, cache->framesize, cache->stackadj,
-          retsize);
+      gdb_printf (gdb_stdlog,
+                  "stm8_frame_cache: base=%4.4lx curr_pc=%4.4lx "
+                  "curr_sp=%4.4lx framesize=%4.4x stackadj=%4.4x retsize=%d\n",
+                  (unsigned long)cache->base, (unsigned long)current_pc,
+                  (unsigned long)current_sp, cache->framesize, cache->stackadj,
+                  retsize);
 
       CORE_ADDR frame_pc;
       CORE_ADDR frame_sp;
@@ -748,13 +750,11 @@ stm8_frame_cache (frame_info_ptr next_frame, void **this_cache)
           next_frame, cache->saved_regs, STM8_SP_REGNUM));
 
       frame_pc = frame_pc >> 16;
-      gdb_printf (gdb_stdlog,
-                  "stm8_frame_cache: pc=%8.8lx *pc=%8.8lx\n",
-                  (unsigned long)cache->saved_regs[STM8_PC_REGNUM].addr(),
+      gdb_printf (gdb_stdlog, "stm8_frame_cache: pc=%8.8lx *pc=%8.8lx\n",
+                  (unsigned long)cache->saved_regs[STM8_PC_REGNUM].addr (),
                   (unsigned long)frame_pc);
-      gdb_printf (gdb_stdlog,
-                  "stm8_frame_cache: sp=%8.8lx *sp=%8.8lx\n",
-                  (unsigned long)cache->saved_regs[STM8_SP_REGNUM].addr(),
+      gdb_printf (gdb_stdlog, "stm8_frame_cache: sp=%8.8lx *sp=%8.8lx\n",
+                  (unsigned long)cache->saved_regs[STM8_SP_REGNUM].addr (),
                   (unsigned long)frame_sp);
     }
 
@@ -883,45 +883,13 @@ static const struct frame_unwind stm8_frame_unwind
         NULL,
         default_frame_sniffer };
 
-struct target_desc *tdesc_stm8;
-static void
-initialize_tdesc_stm8 (void)
-{
-  target_desc_up tdesc = allocate_target_description ();
-  struct tdesc_feature *feature;
-
-  feature = tdesc_create_feature (tdesc.get (), "org.gnu.gdb.stm8.core");
-  tdesc_create_reg (feature, "pc", 0, 1, "general", 32, "uint32");
-  tdesc_create_reg (feature, "a", 1, 1, "general", 8, "uint8");
-  tdesc_create_reg (feature, "x", 2, 1, "general", 16, "uint16");
-  tdesc_create_reg (feature, "y", 3, 1, "general", 16, "uint16");
-  tdesc_create_reg (feature, "sp", 4, 1, "general", 16, "uint16");
-  tdesc_create_reg (feature, "cc", 5, 1, "general", 8, "uint8");
-
-  tdesc_stm8 = tdesc.release();
-}
-
 /* Initialize the gdbarch structure for the STM8.  */
-
 static struct gdbarch *
 stm8_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
-  struct gdbarch *gdbarch;
-  struct stm8_gdbarch_tdep *tdep;
   tdesc_arch_data_up tdesc_data;
   const struct target_desc *tdesc = info.target_desc
       = 0; // override target desc if any
-
-  /* If there is already a candidate, use it.  */
-  arches = gdbarch_list_lookup_by_info (arches, &info);
-  if (arches != NULL)
-    {
-      tdep = gdbarch_tdep<stm8_gdbarch_tdep>(arches->gdbarch);
-      stm8_initialize_soft_register_info (tdep);
-      return arches->gdbarch;
-    }
-  if (tdesc == NULL)
-    tdesc = tdesc_stm8;
 
   /* Check any target description for validity.  */
   if (tdesc_has_registers (tdesc))
@@ -932,6 +900,7 @@ stm8_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
       feature = tdesc_find_feature (tdesc, "org.gnu.gdb.stm8.core");
       if (feature == NULL)
         return NULL;
+
       tdesc_data = tdesc_data_alloc ();
 
       valid_p = 1;
@@ -942,6 +911,22 @@ stm8_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
         return NULL;
     }
 
+  /* If there is already a candidate, use it.  */
+  for (gdbarch_list *best_arch = gdbarch_list_lookup_by_info (arches, &info);
+       best_arch != nullptr;
+       best_arch = gdbarch_list_lookup_by_info (best_arch->next, &info))
+    {
+      stm8_gdbarch_tdep *tdep
+          = gdbarch_tdep<stm8_gdbarch_tdep> (arches->gdbarch);
+
+      if (tdep)
+        return best_arch->gdbarch;
+    }
+
+  gdbarch *gdbarch
+      = gdbarch_alloc (&info, gdbarch_tdep_up (new stm8_gdbarch_tdep));
+  stm8_gdbarch_tdep *tdep = gdbarch_tdep<stm8_gdbarch_tdep> (gdbarch);
+
   /* None found, create a new architecture from the information provided.  */
   gdbarch = gdbarch_alloc (&info, gdbarch_tdep_up (new stm8_gdbarch_tdep));
   tdep = gdbarch_tdep<stm8_gdbarch_tdep> (gdbarch);
@@ -949,11 +934,17 @@ stm8_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   /* Initialize soft registers */
   stm8_initialize_soft_register_info (tdep);
 
+  type_allocator alloc (gdbarch);
+  tdep->void_type = alloc.new_type (TYPE_CODE_VOID, TARGET_CHAR_BIT, "void");
+  tdep->func_void_type = make_function_type (tdep->void_type, NULL);
+  tdep->pc_type = init_pointer_type (alloc, 2 * TARGET_CHAR_BIT, NULL,
+                                     tdep->func_void_type);
+
   set_gdbarch_num_regs (gdbarch, STM8_NUM_REGS);
   set_gdbarch_register_name (gdbarch, stm8_register_name);
   set_gdbarch_register_type (gdbarch, stm8_register_type);
-  set_tdesc_pseudo_register_type (gdbarch, stm8_register_type);
   set_tdesc_pseudo_register_name (gdbarch, stm8_register_name);
+  set_tdesc_pseudo_register_type (gdbarch, stm8_register_type);
 
   set_gdbarch_num_pseudo_regs (gdbarch, STM8_NUM_PSEUDOREGS);
   set_gdbarch_pseudo_register_read (gdbarch, stm8_pseudo_register_read);
@@ -999,19 +990,8 @@ stm8_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   frame_unwind_append_unwinder (gdbarch, &stm8_frame_unwind);
   frame_base_append_sniffer (gdbarch, dwarf2_frame_base_sniffer);
 
-  /* Create a type for PC.  We can't use builtin types here, as they may not
-     be defined.  */
-  type_allocator alloc (gdbarch);
-  tdep->void_type
-      = alloc.new_type (TYPE_CODE_VOID, TARGET_CHAR_BIT, "void");
-  tdep->func_void_type = make_function_type (tdep->void_type, NULL);
-  tdep->pc_type
-      = alloc.new_type (TYPE_CODE_PTR, 2 * TARGET_CHAR_BIT, NULL);
-  tdep->pc_type->set_target_type(tdep->func_void_type);
-  tdep->pc_type->set_is_unsigned(1);
-
   if (tdesc_data != NULL)
-    tdesc_use_registers (gdbarch, tdesc, std::move(tdesc_data));
+    tdesc_use_registers (gdbarch, tdesc, std::move (tdesc_data));
 
   return gdbarch;
 }
@@ -1029,7 +1009,6 @@ _initialize_stm8_tdep ()
 {
   stm8_debug = 0;
   gdbarch_register (bfd_arch_stm8, stm8_gdbarch_init);
-  initialize_tdesc_stm8 ();
 
   add_setshow_zuinteger_cmd ("stm8", class_maintenance, &stm8_debug, _ ("\
 Set stm8 debugging."),
