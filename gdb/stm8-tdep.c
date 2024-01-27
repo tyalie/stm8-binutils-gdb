@@ -30,6 +30,7 @@
 #include "frame.h"
 #include "gdbcmd.h"
 #include "gdbcore.h"
+#include "gdbsupport/common-debug.h"
 #include "gdbtypes.h"
 #include "inferior.h"
 #include "objfiles.h"
@@ -66,7 +67,9 @@ enum stm8_producer
 
 static const char *stm8_register_names[] = { "pc", "a", "x", "y", "sp", "cc" };
 
-unsigned int stm8_debug = 1;
+unsigned int stm8_debug = 0;
+#define stm8_debug_printf(fmt, ...)                                           \
+  debug_prefixed_printf_cond (stm8_debug, "stm8", fmt, ##__VA_ARGS__)
 
 #define STM8_NUM_REGS ARRAY_SIZE (stm8_register_names)
 
@@ -342,9 +345,7 @@ stm8_breakpoint_kind_from_pc (struct gdbarch *gdbarch, CORE_ADDR *pcptr)
 {
   CORE_ADDR pc = *pcptr;
 
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog, "stm8_breakpoint_kind_from_pc called %8.8lx\n",
-                pc);
+  stm8_debug_printf ("stm8_breakpoint_kind_from_pc called %8.8lx\n", pc);
 
   return 1;
 }
@@ -352,8 +353,7 @@ stm8_breakpoint_kind_from_pc (struct gdbarch *gdbarch, CORE_ADDR *pcptr)
 static const gdb_byte *
 stm8_sw_breakpoint_from_kind (struct gdbarch *gdbarch, int kind, int *size)
 {
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog, "stm8_sw_breakpoint_from_kind called\n");
+  stm8_debug_printf ("stm8_sw_breakpoint_from_kind called\n");
 
   static gdb_byte stm8_breakpoint[] = { 0x8b };
 
@@ -401,9 +401,8 @@ stm8_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int reg)
         }
     }
 
-  if ((stm8_debug > 1) && (ret >= 0))
-    gdb_printf (gdb_stdlog, "stm8_dwarf2_reg_to_regnum called reg=%d ret=%d\n",
-                reg, t[reg]);
+  stm8_debug_printf ("stm8_dwarf2_reg_to_regnum called reg=%d ret=%d\n", reg,
+                     t[reg]);
 
   return ret;
 }
@@ -411,8 +410,7 @@ stm8_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int reg)
 static void
 stm8_write_pc (struct regcache *regcache, CORE_ADDR pc)
 {
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog, "stm8_write_pc called\n");
+  stm8_debug_printf ("stm8_write_pc called\n");
   regcache_cooked_write_unsigned (regcache, STM8_PC_REGNUM, pc);
 }
 
@@ -428,9 +426,7 @@ stm8_unwind_pc (struct gdbarch *gdbarch, frame_info_ptr next_frame)
     pc = extract_typed_address (buf, builtin_type (gdbarch)->builtin_func_ptr);
   else
     pc = extract_typed_address (buf, tdep->pc_type);
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog, "stm8_unwind_pc called: pc=%8.8lx\n",
-                (unsigned long)pc);
+  stm8_debug_printf ("stm8_unwind_pc called: pc=%8.8lx\n", (unsigned long)pc);
   return pc;
 }
 
@@ -441,8 +437,7 @@ stm8_unwind_sp (struct gdbarch *gdbarch, frame_info_ptr next_frame)
 
   sp = frame_unwind_register_unsigned (next_frame, STM8_SP_REGNUM);
   sp = gdbarch_addr_bits_remove (gdbarch, sp);
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog, "stm8_unwind_sp called: sp=%8.8lx\n", sp);
+  stm8_debug_printf ("stm8_unwind_sp called: sp=%8.8lx\n", sp);
   return sp;
 }
 
@@ -491,11 +486,10 @@ stm8_get_return_insn (CORE_ADDR pc)
     }
 
   // defaut to RET
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog,
-                "WARNING: stm8_get_return_insn: No return instruction found "
-                "in function %s start_addr = %8.8lx end_addr = %8.8lx\n",
-                name, func_addr, func_end);
+  stm8_debug_printf (
+      "WARNING: stm8_get_return_insn: No return instruction found "
+      "in function %s start_addr = %8.8lx end_addr = %8.8lx\n",
+      name, func_addr, func_end);
   return RETURN_RET;
 }
 
@@ -510,10 +504,9 @@ stm8_analyze_prologue (struct gdbarch *gdbarch, CORE_ADDR pc,
   int done;
   gdb_byte buf[4];
 
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog,
-                "stm8_analyze_prologue called (pc=%8.8lx current_pc=%8.8lx)\n",
-                (unsigned long)pc, (unsigned long)current_pc);
+  stm8_debug_printf (
+      "stm8_analyze_prologue called (pc=%8.8lx current_pc=%8.8lx)\n",
+      (unsigned long)pc, (unsigned long)current_pc);
 
   /* Initialize info about frame.  */
   cache->framesize = 0;
@@ -544,9 +537,8 @@ then our frame has not yet been set up.  */
   // RET?
   if (buf[0] == 0x81)
     {
-      if (stm8_debug)
-        gdb_printf (gdb_stdlog, "stm8_analyze_prologue: current_pc is RTS so "
-                                "we dont have a frame!\n");
+      stm8_debug_printf ("stm8_analyze_prologue: current_pc is RTS so "
+                         "we dont have a frame!\n");
       return pc;
     }
 
@@ -554,10 +546,9 @@ then our frame has not yet been set up.  */
   current pc, or the end of the function, whichever is first.  */
   stop = (current_pc < func_end ? current_pc : func_end);
 
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog,
-                "stm8_analyze_prologue: name=%s, func_addr=%s, stop=%s\n",
-                name, paddress (gdbarch, func_addr), paddress (gdbarch, stop));
+  stm8_debug_printf ("stm8_analyze_prologue: name=%s, func_addr=%s, stop=%s\n",
+                     name, paddress (gdbarch, func_addr),
+                     paddress (gdbarch, stop));
 
   /* scan the prologue */
   pc = func_addr;
@@ -612,10 +603,9 @@ then our frame has not yet been set up.  */
         }
     }
 
-  if (stm8_debug)
-    if (cache->frameless_p)
-      gdb_printf (gdb_stdlog, "stm8_analyze_prologue: this function is "
-                              "frameless! No pc adjustment was done.\n");
+  if (cache->frameless_p)
+    stm8_debug_printf ("stm8_analyze_prologue: this function is "
+                       "frameless! No pc adjustment was done.\n");
 
   return pc;
 }
@@ -626,9 +616,8 @@ then our frame has not yet been set up.  */
 static CORE_ADDR
 stm8_skip_prologue (struct gdbarch *gdbarch, CORE_ADDR start_pc)
 {
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog, "stm8_skip_prologue called: start_pc=%8.8lx\n",
-                (unsigned long)start_pc);
+  stm8_debug_printf ("stm8_skip_prologue called: start_pc=%8.8lx\n",
+                     (unsigned long)start_pc);
 
   struct symtab_and_line sal;
   CORE_ADDR func_start, func_end, ostart_pc;
@@ -643,10 +632,8 @@ Always analyze the prologue.  */
     {
       post_prologue_pc = skip_prologue_using_sal (gdbarch, func_start);
 
-      if (stm8_debug)
-        gdb_printf (gdb_stdlog,
-                    "stm8_skip_prologue: post_prologue_pc=%8.8lx\n",
-                    (unsigned long)post_prologue_pc);
+      stm8_debug_printf ("stm8_skip_prologue: post_prologue_pc=%8.8lx\n",
+                         (unsigned long)post_prologue_pc);
 
       if (post_prologue_pc != 0)
         return std::max (start_pc, post_prologue_pc);
@@ -655,13 +642,11 @@ Always analyze the prologue.  */
   ostart_pc
       = stm8_analyze_prologue (gdbarch, func_start, 0xffffffffUL, &cache);
 
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog,
-                "stm8_skip_prologue: start_pc=%8.8lx ostart_pc=%8.8lx "
-                "func_start=%8.8lx func_end=%8.8lx sal.end=%8.8lx\n",
-                (unsigned long)start_pc, (unsigned long)ostart_pc,
-                (unsigned long)func_start, (unsigned long)func_end,
-                (unsigned long)sal.end);
+  stm8_debug_printf ("stm8_skip_prologue: start_pc=%8.8lx ostart_pc=%8.8lx "
+                     "func_start=%8.8lx func_end=%8.8lx sal.end=%8.8lx\n",
+                     (unsigned long)start_pc, (unsigned long)ostart_pc,
+                     (unsigned long)func_start, (unsigned long)func_end,
+                     (unsigned long)sal.end);
 
   if (ostart_pc > start_pc)
     return ostart_pc;
@@ -684,8 +669,7 @@ sp-> empty
 static struct stm8_frame_cache *
 stm8_frame_cache (frame_info_ptr next_frame, void **this_cache)
 {
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog, "stm8_frame_cache called\n");
+  stm8_debug_printf ("stm8_frame_cache called\n");
 
   struct stm8_frame_cache *cache;
   struct gdbarch *gdbarch = get_frame_arch (next_frame);
@@ -735,12 +719,12 @@ stm8_frame_cache (frame_info_ptr next_frame, void **this_cache)
 
   if (stm8_debug)
     {
-      gdb_printf (gdb_stdlog,
-                  "stm8_frame_cache: base=%4.4lx curr_pc=%4.4lx "
-                  "curr_sp=%4.4lx framesize=%4.4x stackadj=%4.4x retsize=%d\n",
-                  (unsigned long)cache->base, (unsigned long)current_pc,
-                  (unsigned long)current_sp, cache->framesize, cache->stackadj,
-                  retsize);
+      stm8_debug_printf (
+          "stm8_frame_cache: base=%4.4lx curr_pc=%4.4lx "
+          "curr_sp=%4.4lx framesize=%4.4x stackadj=%4.4x retsize=%d\n",
+          (unsigned long)cache->base, (unsigned long)current_pc,
+          (unsigned long)current_sp, cache->framesize, cache->stackadj,
+          retsize);
 
       CORE_ADDR frame_pc;
       CORE_ADDR frame_sp;
@@ -750,12 +734,14 @@ stm8_frame_cache (frame_info_ptr next_frame, void **this_cache)
           next_frame, cache->saved_regs, STM8_SP_REGNUM));
 
       frame_pc = frame_pc >> 16;
-      gdb_printf (gdb_stdlog, "stm8_frame_cache: pc=%8.8lx *pc=%8.8lx\n",
-                  (unsigned long)cache->saved_regs[STM8_PC_REGNUM].addr (),
-                  (unsigned long)frame_pc);
-      gdb_printf (gdb_stdlog, "stm8_frame_cache: sp=%8.8lx *sp=%8.8lx\n",
-                  (unsigned long)cache->saved_regs[STM8_SP_REGNUM].addr (),
-                  (unsigned long)frame_sp);
+      stm8_debug_printf (
+          "stm8_frame_cache: pc=%8.8lx *pc=%8.8lx\n",
+          (unsigned long)cache->saved_regs[STM8_PC_REGNUM].addr (),
+          (unsigned long)frame_pc);
+      stm8_debug_printf (
+          "stm8_frame_cache: sp=%8.8lx *sp=%8.8lx\n",
+          (unsigned long)cache->saved_regs[STM8_SP_REGNUM].addr (),
+          (unsigned long)frame_sp);
     }
 
   return (struct stm8_frame_cache *)(*this_cache);
@@ -780,9 +766,8 @@ stm8_frame_this_id (frame_info_ptr next_frame, void **this_cache,
 
   (*this_id) = frame_id_build (base, func);
 
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog, "stm8_frame_this_id: base=%8.8lx pc=%8.8lx\n",
-                base, func);
+  stm8_debug_printf ("stm8_frame_this_id: base=%8.8lx pc=%8.8lx\n", base,
+                     func);
 }
 
 static struct value *
@@ -794,9 +779,8 @@ stm8_frame_prev_register (frame_info_ptr this_frame, void **this_cache,
 
   value = trad_frame_get_prev_register (this_frame, info->saved_regs, regnum);
 
-  if (stm8_debug)
-    gdb_printf (gdb_stdlog, "stm8_frame_prev_register: regnum(%d)=%8.8lx\n",
-                regnum, (unsigned long)value_as_long (value));
+  stm8_debug_printf ("stm8_frame_prev_register: regnum(%d)=%8.8lx\n", regnum,
+                     (unsigned long)value_as_long (value));
 
   return value;
 }
