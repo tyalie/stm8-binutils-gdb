@@ -1,6 +1,7 @@
 /* include/opcode/stm8.h -- Assembler for the STM8.
    Written by Ake Rehnman 2017-02-21,
    ake.rehnman (at) gmail dot com
+   Adapted by Sophie 'Tyalie' Friedrich
 
    Copyright (C) 2007-2024 Free Software Foundation, Inc.
 
@@ -76,7 +77,9 @@ struct stm8_opcodes_s
 
 extern const struct stm8_opcodes_s stm8_opcodes[];
 
-extern int stm8_compute_insn_size (struct stm8_opcodes_s opcode);
+extern int stm8_compute_insn_size (const struct stm8_opcodes_s *opcode);
+
+int stm8_num_opcode_operands (const struct stm8_opcodes_s *opcode);
 
 extern unsigned int stm8_opcode_size (unsigned int number);
 
@@ -120,7 +123,5 @@ extern void print_fixup (void *);
 #define DEBUG_TRACE(M, ...) ;
 #define DEBUG_TRACE_IF(C, M, ...) ;
 #endif /* DEBUG_STM8 */
-
-int stm8_num_opcode_operands (struct stm8_opcodes_s opcode);
 
 #endif /* _STM8_H_ */

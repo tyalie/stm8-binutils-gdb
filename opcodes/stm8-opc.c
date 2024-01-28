@@ -1,6 +1,7 @@
 /* stm8-opc.c -- Table of opcodes for the STM8 processor.
    Copyright (C) 2007-2024 Free Software Foundation, Inc.
    Contributed by Ake Rehnman ake dot rehnman (at) gmail dot com
+   Adapted by Sophie 'Tyalie' Friedrich
 
    This file is part of the GNU opcodes library.
 
@@ -736,10 +737,10 @@ const struct stm8_opcodes_s stm8_opcodes[] = {
 };
 
 int
-stm8_num_opcode_operands (struct stm8_opcodes_s opcode)
+stm8_num_opcode_operands (const struct stm8_opcodes_s *opcode)
 {
   int i;
-  for (i = 0; opcode.constraints[i]; i++)
+  for (i = 0; opcode->constraints[i]; i++)
     ;
   return i;
 }
@@ -757,12 +758,12 @@ stm8_opcode_size (unsigned int number)
 }
 
 int
-stm8_compute_insn_size (struct stm8_opcodes_s opcode)
+stm8_compute_insn_size (const struct stm8_opcodes_s *opcode)
 {
   int i, ret = 0;
-  for (i = 0; opcode.constraints[i] != ST8_END; i++)
+  for (i = 0; opcode->constraints[i] != ST8_END; i++)
     {
-      switch (opcode.constraints[i])
+      switch (opcode->constraints[i])
         {
         case ST8_PCREL:
         case ST8_SHORTMEM:
@@ -815,6 +816,6 @@ stm8_compute_insn_size (struct stm8_opcodes_s opcode)
           break;
         }
     }
-  ret += stm8_opcode_size (opcode.bin_opcode);
+  ret += stm8_opcode_size (opcode->bin_opcode);
   return (ret);
 }

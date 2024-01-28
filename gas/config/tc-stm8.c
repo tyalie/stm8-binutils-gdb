@@ -1229,7 +1229,7 @@ md_assemble (char *str)
       if (!strcmp (op, opcode[i].name))
         if (!cmpspec (opcode[i].constraints, exps, count))
           {
-            int insn_size = stm8_compute_insn_size (opcode[i]);
+            int insn_size = stm8_compute_insn_size (&opcode[i]);
             char *frag = frag_more (insn_size);
             int opcode_length = stm8_opcode_size (opcode[i].bin_opcode);
             bfd_put_bits (opcode[i].bin_opcode, frag, opcode_length * 8, true);
