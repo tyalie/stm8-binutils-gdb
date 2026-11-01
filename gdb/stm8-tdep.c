@@ -67,6 +67,9 @@ enum stm8_producer
 
 static const char *stm8_register_names[] = { "pc", "a", "x", "y", "sp", "cc" };
 
+/* Builtin target descriptor for STM8 */
+struct target_desc *tdesc_stm8;
+
 unsigned int stm8_debug = 0;
 #define stm8_debug_printf(fmt, ...)                                           \
   debug_prefixed_printf_cond (stm8_debug, "stm8", fmt, ##__VA_ARGS__)
@@ -122,7 +125,11 @@ stm8_register_to_value (frame_info_ptr frame, int regnum, struct type *type,
 
   memset (to, 0, type->length ());
 
-  if (!get_frame_register_bytes (frame, regnum, 0,
+  /* get_frame_register_bytes expects "next_frame" (the frame inner to the
+     one whose registers we want), not "this_frame".  This API changed
+     between GDB 8.1 and later versions.  */
+  frame_info_ptr next_frame = get_next_frame_sentinel_okay (frame);
+  if (!get_frame_register_bytes (next_frame, regnum, 0,
                                  { to + type->length () - 2, 2 }, optimizedp,
                                  unavailablep))
     return 0;
@@ -392,7 +399,7 @@ stm8_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int reg)
   else
     t = dwarf2_to_reg_map_gcc;
 
-  for (int i = 0; (t[i] > 0) && (i < 32); i++)
+  for (int i = 0; (t[i] >= 0) && (i < 32); i++)
     {
       if (i == reg)
         {
@@ -402,7 +409,7 @@ stm8_dwarf2_reg_to_regnum (struct gdbarch *gdbarch, int reg)
     }
 
   stm8_debug_printf ("stm8_dwarf2_reg_to_regnum called reg=%d ret=%d\n", reg,
-                     t[reg]);
+                     ret);
 
   return ret;
 }
@@ -739,8 +746,8 @@ stm8_frame_cache (frame_info_ptr next_frame, void **this_cache)
           (unsigned long)cache->saved_regs[STM8_PC_REGNUM].addr (),
           (unsigned long)frame_pc);
       stm8_debug_printf (
-          "stm8_frame_cache: sp=%8.8lx *sp=%8.8lx\n",
-          (unsigned long)cache->saved_regs[STM8_SP_REGNUM].addr (),
+          "stm8_frame_cache: sp(value)=%8.8lx *sp=%8.8lx\n",
+          (unsigned long)cache->saved_regs[STM8_SP_REGNUM].value (),
           (unsigned long)frame_sp);
     }
 
@@ -867,32 +874,100 @@ static const struct frame_unwind stm8_frame_unwind
         NULL,
         default_frame_sniffer };
 
+/* Initialize builtin STM8 target descriptor.
+   This provides a fallback when remote target doesn't supply registers. */
+static void
+initialize_tdesc_stm8 (void)
+{
+  target_desc_up result = allocate_target_description ();
+  set_tdesc_architecture (result.get (), bfd_scan_arch ("stm8"));
+
+  struct tdesc_feature *feature
+      = tdesc_create_feature (result.get (), "org.gnu.gdb.stm8.core");
+
+  tdesc_create_reg (feature, "pc", 0, 1, "general", 32, "uint32");
+  tdesc_create_reg (feature, "a", 1, 1, "general", 8, "uint8");
+  tdesc_create_reg (feature, "x", 2, 1, "general", 16, "uint16");
+  tdesc_create_reg (feature, "y", 3, 1, "general", 16, "uint16");
+  tdesc_create_reg (feature, "sp", 4, 1, "general", 16, "uint16");
+  tdesc_create_reg (feature, "cc", 5, 1, "general", 8, "uint8");
+
+  tdesc_stm8 = result.release ();
+}
+
+/* Validate STM8 target descriptor and allocate tdesc_data if valid.
+   Returns true if descriptor is valid for STM8. */
+static bool
+validate_stm8_descriptor (const struct target_desc *tdesc,
+                          tdesc_arch_data_up &tdesc_data)
+{
+  if (!tdesc_has_registers (tdesc))
+    return false;
+
+  const struct tdesc_feature *feature;
+  feature = tdesc_find_feature (tdesc, "org.gnu.gdb.stm8.core");
+  if (feature == NULL)
+    return false;
+
+  tdesc_data = tdesc_data_alloc ();
+
+  int valid_p = 1;
+  for (int i = 0; i < STM8_NUM_REGS; i++)
+    valid_p &= tdesc_numbered_register (feature, tdesc_data.get (), i,
+                                        stm8_register_names[i]);
+
+  if (!valid_p)
+    {
+      tdesc_data.reset ();
+      return false;
+    }
+
+  return true;
+}
+
+/* SDCC does not set SHF_EXECINSTR on code sections (HOME, CODE, etc.),
+   so GDB classifies function symbols as data symbols based on section
+   flags alone.  This causes find_pc_sect_compunit_symtab to bail out
+   early (it skips data addresses), breaking source line resolution for
+   function-name breakpoints.  Fix this by checking BSF_FUNCTION which
+   BFD sets from the ELF STT_FUNC symbol type.  */
+
+static void
+stm8_elf_make_msymbol_special (asymbol *sym, struct minimal_symbol *msym)
+{
+  if (sym->flags & BSF_FUNCTION)
+    {
+      if (msym->type () == mst_data || msym->type () == mst_bss)
+	msym->set_type (mst_text);
+      else if (msym->type () == mst_file_data || msym->type () == mst_file_bss)
+	msym->set_type (mst_file_text);
+    }
+}
+
 /* Initialize the gdbarch structure for the STM8.  */
 static struct gdbarch *
 stm8_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
 {
   tdesc_arch_data_up tdesc_data;
-  const struct target_desc *tdesc = info.target_desc
-      = 0; // override target desc if any
+  const struct target_desc *tdesc = info.target_desc;
 
-  /* Check any target description for validity.  */
-  if (tdesc_has_registers (tdesc))
+  /* Try target-supplied descriptor first, fall back to builtin if invalid */
+  if (tdesc != NULL && !validate_stm8_descriptor (tdesc, tdesc_data))
     {
-      const struct tdesc_feature *feature;
-      int valid_p;
+      warning (_ ("Target-supplied descriptor is invalid for STM8, "
+                  "using builtin descriptor"));
+      tdesc = NULL;
+    }
 
-      feature = tdesc_find_feature (tdesc, "org.gnu.gdb.stm8.core");
-      if (feature == NULL)
-        return NULL;
-
-      tdesc_data = tdesc_data_alloc ();
-
-      valid_p = 1;
-      for (int i = 0; i < STM8_NUM_REGS; i++)
-        valid_p &= tdesc_numbered_register (feature, tdesc_data.get (), i,
-                                            stm8_register_names[i]);
-      if (!valid_p)
-        return NULL;
+  /* Use builtin descriptor as fallback */
+  if (tdesc == NULL)
+    {
+      tdesc = tdesc_stm8;
+      if (!validate_stm8_descriptor (tdesc, tdesc_data))
+        {
+          /* Builtin descriptor is broken - this should never happen */
+          internal_error (_("Builtin STM8 descriptor is invalid"));
+        }
     }
 
   /* If there is already a candidate, use it.  */
@@ -970,6 +1045,9 @@ stm8_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_unwind_pc (gdbarch, stm8_unwind_pc);
   set_gdbarch_unwind_sp (gdbarch, stm8_unwind_sp);
 
+  set_gdbarch_elf_make_msymbol_special (gdbarch,
+					stm8_elf_make_msymbol_special);
+
   dwarf2_append_unwinders (gdbarch);
   frame_unwind_append_unwinder (gdbarch, &stm8_frame_unwind);
   frame_base_append_sniffer (gdbarch, dwarf2_frame_base_sniffer);
@@ -993,6 +1071,9 @@ _initialize_stm8_tdep ()
 {
   stm8_debug = 0;
   gdbarch_register (bfd_arch_stm8, stm8_gdbarch_init);
+
+  /* Initialize builtin target descriptor */
+  initialize_tdesc_stm8 ();
 
   add_setshow_zuinteger_cmd ("stm8", class_maintenance, &stm8_debug, _ ("\
 Set stm8 debugging."),
